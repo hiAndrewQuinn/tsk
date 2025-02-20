@@ -23,3 +23,9 @@ go.work.sum
 
 # env file
 .env
+
+# The binary itself
+tsk
+
+# The build directory
+build/
