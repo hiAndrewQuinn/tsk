@@ -241,23 +241,26 @@ func main() {
 	// -------------------------------
 	// Header (Top Line)
 	// -------------------------------
-	// Left part: Title in reverse video using markup.
-	headerLeft := tview.NewTextView()
-	headerLeft.SetDynamicColors(true)
-	headerLeft.SetText("[reverse]tsk - Andrew's Pocket Finnish Dictionary[::-]")
-	headerLeft.SetTextAlign(tview.AlignLeft)
+	headerLeft := tview.NewTextView().
+		SetText("tsk - Andrew's Pocket Finnish Dictionary").
+		SetTextAlign(tview.AlignLeft).
+		SetTextColor(tcell.ColorBlack)
+	headerLeft.SetBackgroundColor(tcell.ColorLightGray)
 
-	// Right part: Button with underlined link.
-	headerRight := tview.NewButton("[::u]https://andrew-quinn.me[::-]")
+	headerRight := tview.NewButton("[::u]https://github.com/hiAndrewQuinn/tsk[::-]")
+	headerRight.SetLabelColor(tcell.ColorWhite)
+	// Set the selected style to ensure light gray background with black text.
 	headerRight.SetSelectedFunc(func() {
-		if err := openBrowser("https://andrew-quinn.me"); err != nil {
+		if err := openBrowser("https://github.com/hiAndrewQuinn/tsk"); err != nil {
 			fmt.Fprintf(os.Stderr, "Error opening browser: %v\n", err)
 		}
 	})
 
-	headerFlex := tview.NewFlex().SetDirection(tview.FlexColumn).
+	headerFlex := tview.NewFlex().SetDirection(tview.FlexColumn)
+	headerFlex.SetBackgroundColor(tcell.ColorLightGray)
+	headerFlex.
 		AddItem(headerLeft, 0, 1, false).
-		AddItem(headerRight, 30, 0, false)
+		AddItem(headerRight, 40, 0, false)
 
 	// -------------------------------
 	// Left Pane: Search Input & List
@@ -370,17 +373,42 @@ func main() {
 	// -------------------------------
 	// Footer (Bottom Line)
 	// -------------------------------
-	footer := tview.NewTextView()
-	footer.SetText("Esc to exit. Enter to clear the search. Wiktionary entries under CC BY-SA.").
-		SetTextAlign(tview.AlignCenter)
+	footerLeft := tview.NewTextView().
+		SetText("Esc to exit. Enter to clear the search. Wiktionary entries under CC BY-SA.").
+		SetTextAlign(tview.AlignLeft).
+		SetTextColor(tcell.ColorBlack)
+	footerLeft.SetBackgroundColor(tcell.ColorLightGray)
+
+	footerRight := tview.NewButton("[::u]https://andrew-quinn.me/[::-]")
+	footerRight.SetLabelColor(tcell.ColorWhite)
+	// Set the selected style for the footer button as well.
+	footerRight.SetSelectedFunc(func() {
+		if err := openBrowser("https://andrew-quinn.me/"); err != nil {
+			fmt.Fprintf(os.Stderr, "Error opening browser: %v\n", err)
+		}
+	})
+
+	footerFlex := tview.NewFlex().SetDirection(tview.FlexColumn)
+	footerFlex.SetBackgroundColor(tcell.ColorLightGray)
+	footerFlex.
+		AddItem(footerLeft, 0, 1, false).
+		AddItem(footerRight, 40, 0, false)
 
 	// -------------------------------
-	// Main Layout: Combine Header, Center, and Footer
+	// Main Layout
 	// -------------------------------
-	mainFlex := tview.NewFlex().SetDirection(tview.FlexRow).
+	mainFlex := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		// Top row (header)
 		AddItem(headerFlex, 1, 0, false).
+		// Spacer for a black bar
+		AddItem(nil, 1, 0, false).
+		// Main content (search + list + details)
 		AddItem(topFlex, 0, 1, true).
-		AddItem(footer, 1, 0, false)
+		// Spacer for a black bar
+		AddItem(nil, 1, 0, false).
+		// Bottom row (footer)
+		AddItem(footerFlex, 1, 0, false)
 
 	if err := app.SetRoot(mainFlex, true).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
