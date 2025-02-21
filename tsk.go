@@ -351,7 +351,7 @@ func main() {
 							if targetGlosses, ok := glosses[target]; ok {
 								// Iterate over *all* glosses for `target`.
 								for _, tg := range targetGlosses {
-									formatted += fmt.Sprintf("  -> %s (%s)\n", tg.Word, tg.Pos)
+									formatted += fmt.Sprintf("  ~> %s (%s)\n", tg.Word, tg.Pos)
 									for _, tm := range tg.Meanings {
 										formatted += fmt.Sprintf("     - %s\n", tm)
 
@@ -363,7 +363,7 @@ func main() {
 												if targetGlosses2, ok := glosses[target2]; ok {
 													// Again, iterate over *all* second-level glosses.
 													for _, tg2 := range targetGlosses2 {
-														formatted += fmt.Sprintf("       -> %s (%s)\n", tg2.Word, tg2.Pos)
+														formatted += fmt.Sprintf("       ~> %s (%s)\n", tg2.Word, tg2.Pos)
 														for _, tm2 := range tg2.Meanings {
 															formatted += fmt.Sprintf("          - %s\n", tm2)
 														}
