@@ -21,7 +21,7 @@ import (
 // ----------------------
 // Version Variable
 // ----------------------
-const version = "v0.0.1"
+const version = "v0.0.2"
 
 // ----------------------
 // Embedded Data Files
