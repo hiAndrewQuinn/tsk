@@ -340,24 +340,30 @@ func main() {
 				formatted += fmt.Sprintf("%s (%s)\n\n", gloss.Word, gloss.Pos)
 				for _, meaning := range gloss.Meanings {
 					formatted += fmt.Sprintf("- %s\n", meaning)
+
 					// First-level deep lookup.
 					for _, phrase := range deeperPhrases {
 						prefix := phrase + " "
 						if strings.HasPrefix(meaning, prefix) {
+							// Trim prefix and trailing punctuation.
 							target := strings.TrimRight(strings.TrimSpace(strings.TrimPrefix(meaning, prefix)), ".,:;!?")
+
 							if targetGlosses, ok := glosses[target]; ok {
-								formatted += fmt.Sprintf("  -> %s (%s)\n", targetGlosses[0].Word, targetGlosses[0].Pos)
+								// Iterate over *all* glosses for `target`.
 								for _, tg := range targetGlosses {
+									formatted += fmt.Sprintf("  -> %s (%s)\n", tg.Word, tg.Pos)
 									for _, tm := range tg.Meanings {
 										formatted += fmt.Sprintf("     - %s\n", tm)
+
 										// Second-level deep lookup.
 										for _, phrase2 := range deeperPhrases {
 											prefix2 := phrase2 + " "
 											if strings.HasPrefix(tm, prefix2) {
 												target2 := strings.TrimRight(strings.TrimSpace(strings.TrimPrefix(tm, prefix2)), ".,:;!?")
 												if targetGlosses2, ok := glosses[target2]; ok {
-													formatted += fmt.Sprintf("       -> %s (%s)\n", targetGlosses2[0].Word, targetGlosses2[0].Pos)
+													// Again, iterate over *all* second-level glosses.
 													for _, tg2 := range targetGlosses2 {
+														formatted += fmt.Sprintf("       -> %s (%s)\n", tg2.Word, tg2.Pos)
 														for _, tm2 := range tg2.Meanings {
 															formatted += fmt.Sprintf("          - %s\n", tm2)
 														}
