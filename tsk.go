@@ -188,6 +188,9 @@ func openBrowser(url string) error {
 // ----------------------
 
 func main() {
+  fmt.Println(fmt.Sprintf("tsk (%s) - Andrew's Pocket Finnish Dictionary\n", version))
+  fmt.Println("Project @ https://github.com/hiAndrewQuinn/tsk")
+  fmt.Println("Author  @ https://andrew-quinn.me/\n")
 	debugFlag := flag.Bool("debug", false, "print debug info")
 	flag.Parse()
 
@@ -225,19 +228,21 @@ func main() {
 	}
 
 	// Load glosses.
-	fmt.Println("Loading glosses from", GLOSSES_FILE)
+	fmt.Println("Loading word definitions from", GLOSSES_FILE)
 	glosses, err := loadGlosses()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error loading glosses:", err)
 		os.Exit(1)
 	}
 
+	fmt.Println("Starting the TUI. Thank you for your patience!")
 	app := tview.NewApplication()
 
 	// Global key capture: Pressing Esc exits.
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEsc {
 			app.Stop()
+      fmt.Println("Stopping the TUI. Thank you for exiting gracefully!")
 			return nil
 		}
 		return event
@@ -379,7 +384,7 @@ func main() {
 	// Footer (Bottom Line)
 	// -------------------------------
 	footerLeft := tview.NewTextView().
-		SetText("Esc to exit. Enter to clear the search. Wiktionary entries under CC BY-SA.").
+		SetText("Esc to exit. Enter to clear the search. Up/Down to scroll. Wiktionary entries under CC BY-SA.").
 		SetTextAlign(tview.AlignLeft).
 		SetTextColor(tcell.ColorBlack)
 	footerLeft.SetBackgroundColor(tcell.ColorLightGray)
