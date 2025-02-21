@@ -41,6 +41,20 @@ Visit the [release page](https://github.com/hiAndrewQuinn/tsk/releases) to downl
    ```
    The compiled binaries will be located in the `build` directory.
 
+### Running with Docker
+
+You can build the Dockerfile with
+
+```bash
+docker build -t tsk .
+```
+
+and run it with
+
+```bash
+docker run --rm -it tsk
+```
+
 ## Makefile Commands
 
 The Makefile provides several useful targets for building, installing, and cleaning up the project:
