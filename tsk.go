@@ -344,7 +344,7 @@ func main() {
 					for _, phrase := range deeperPhrases {
 						prefix := phrase + " "
 						if strings.HasPrefix(meaning, prefix) {
-							target := strings.TrimSpace(strings.TrimPrefix(meaning, prefix))
+							target := strings.TrimRight(strings.TrimSpace(strings.TrimPrefix(meaning, prefix)), ".,:;!?")
 							if targetGlosses, ok := glosses[target]; ok {
 								formatted += fmt.Sprintf("  -> %s (%s)\n", targetGlosses[0].Word, targetGlosses[0].Pos)
 								for _, tg := range targetGlosses {
@@ -354,7 +354,7 @@ func main() {
 										for _, phrase2 := range deeperPhrases {
 											prefix2 := phrase2 + " "
 											if strings.HasPrefix(tm, prefix2) {
-												target2 := strings.TrimSpace(strings.TrimPrefix(tm, prefix2))
+												target2 := strings.TrimRight(strings.TrimSpace(strings.TrimPrefix(tm, prefix2)), ".,:;!?")
 												if targetGlosses2, ok := glosses[target2]; ok {
 													formatted += fmt.Sprintf("       -> %s (%s)\n", targetGlosses2[0].Word, targetGlosses2[0].Pos)
 													for _, tg2 := range targetGlosses2 {
