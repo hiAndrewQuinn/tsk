@@ -27,8 +27,8 @@ const version = "v0.0.1"
 // Embedded Data Files
 // ----------------------
 
-//go:embed finwords.txt
-var finwordsTxt string
+//go:embed words.txt
+var wordsTxt string
 
 //go:embed glosses.jsonl
 var glossesJsonl string
@@ -44,7 +44,7 @@ const (
 	TRIE_MAX_SEARCH_DEPTH = 50 // Maximum number of words to return
 
 	// Informational only.
-	WORD_LIST_FILE = "finwords.txt"
+	WORD_LIST_FILE = "words.txt"
 	GLOSSES_FILE   = "glosses.jsonl"
 
 	scrollDebounce = 5000 * time.Millisecond // Only allow one scroll event in this timeframe
@@ -132,7 +132,7 @@ func (t *Trie) CountNodes() int {
 // ----------------------
 
 func loadWords() ([]string, error) {
-	scanner := bufio.NewScanner(strings.NewReader(finwordsTxt))
+	scanner := bufio.NewScanner(strings.NewReader(wordsTxt))
 	var words []string
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())

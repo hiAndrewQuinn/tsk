@@ -78,7 +78,7 @@ Following these steps will allow you to run tsk safely while acknowledging your 
 
 ## Data Sources
 
-- **finwords.txt:** A comprehensive list of Finnish words.
+- **words.txt:** A comprehensive list of Finnish words.
 - **glosses.jsonl:** Word definitions (glosses) derived from Wiktionary.
 
 **Note:** The word list and gloss data are derivatives from Wiktionary and are licensed under [CC BY-SA](https://creativecommons.org/licenses/by-sa/3.0/).
@@ -86,7 +86,7 @@ Following these steps will allow you to run tsk safely while acknowledging your 
 ## License
 
 - **Go Code:** Released under the [Unlicense](https://unlicense.org/).
-- **Data Files (finwords.txt and glosses.jsonl):** Licensed under [CC BY-SA](https://creativecommons.org/licenses/by-sa/3.0/) due to their derivation from Wiktionary.
+- **Data Files (words.txt and glosses.jsonl):** Licensed under [CC BY-SA](https://creativecommons.org/licenses/by-sa/3.0/) due to their derivation from Wiktionary.
 
 ## Credits & Acknowledgments
 
