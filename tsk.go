@@ -19,6 +19,11 @@ import (
 )
 
 // ----------------------
+// Version Variable
+// ----------------------
+const version = "v0.0.1"
+
+// ----------------------
 // Embedded Data Files
 // ----------------------
 
@@ -242,7 +247,7 @@ func main() {
 	// Header (Top Line)
 	// -------------------------------
 	headerLeft := tview.NewTextView().
-		SetText("tsk - Andrew's Pocket Finnish Dictionary").
+		SetText(fmt.Sprintf("tsk (%s) - Andrew's Pocket Finnish Dictionary", version)).
 		SetTextAlign(tview.AlignLeft).
 		SetTextColor(tcell.ColorBlack)
 	headerLeft.SetBackgroundColor(tcell.ColorLightGray)
