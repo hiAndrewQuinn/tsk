@@ -5,9 +5,16 @@ PLATFORMS = linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 wind
 OUTPUT_DIR = build
 MAIN = tsk.go
 
-.PHONY: all clean
+# Installation directory (default: /usr/local/bin)
+INSTALL_DIR ?= /usr/local/bin
 
-all: $(OUTPUT_DIR) build-all
+.PHONY: all clean install
+
+all: words.txt $(OUTPUT_DIR) build-all
+
+# Generate words.txt from glosses.jsonl before building
+words.txt: glosses.jsonl
+	jq '.word' glosses.jsonl | sort -u > words.txt
 
 $(OUTPUT_DIR):
 	mkdir -p $(OUTPUT_DIR)
@@ -24,6 +31,14 @@ build-all:
 		GOOS=$$OS GOARCH=$$ARCH CGO_ENABLED=0 \
 			go build -a -installsuffix cgo -ldflags '-extldflags "-static"' -o $$OUTPUT $(MAIN); \
 	done
+
+install: all
+	@if [ "$(shell go env GOOS)" = "windows" ]; then \
+		echo "Install not supported on Windows"; \
+		exit 1; \
+	fi
+	@echo "Installing tsk to $(INSTALL_DIR)"; \
+	cp $(OUTPUT_DIR)/tsk_$(shell go env GOOS)_$(shell go env GOARCH) $(INSTALL_DIR)/tsk
 
 clean:
 	rm -rf $(OUTPUT_DIR)

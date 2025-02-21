@@ -15,7 +15,7 @@ A tiny, fast, and portable Finnish-English dictionary that searches as you type.
   - macOS, aka Darwin (amd64, arm64)
   - Linux (amd64, arm64)
   - Windows (386, amd64)
-- **Single-file portability**: All of the dictionary info has been embedded right alongside the program itself, so you really do only need that one file. Plug and play!
+- **Single-file portability:** All of the dictionary info has been embedded right alongside the program itself, so you really do only need that one file. Plug and play!
 
 ## Installation
 
@@ -38,6 +38,31 @@ Visit the [release page](https://github.com/hiAndrewQuinn/tsk/releases) to downl
    make
    ```
    The compiled binaries will be located in the `build` directory.
+
+## Makefile Commands
+
+The Makefile provides several useful targets for building, installing, and cleaning up the project:
+
+- **`make` or `make all`**  
+  This is the default target. It first generates `words.txt` from `glosses.jsonl` using the command:
+  ```bash
+  jq '.word' glosses.jsonl | sort -u > words.txt
+  ```
+  Then it creates the build directory and compiles the binary for all defined platforms, placing them in the `build` directory.
+
+- **`make words.txt`**  
+  Regenerates the `words.txt` file from `glosses.jsonl` independently. This is useful if you update the glosses and want to update the word list without rebuilding the entire project.
+
+- **`make build-all`**  
+  Builds the binary for all supported target platforms. This target is run as part of the default `all` target but can also be invoked on its own if you wish to rebuild the binaries.
+
+- **`make install`**  
+  Builds the project (if not already built) and then installs the binary for your current platform into your system's PATH (defaulting to `/usr/local/bin`). On non-Windows systems, it copies the appropriate binary from the `build` directory so you can run `tsk` from anywhere. (Installation is not supported on Windows.)
+
+- **`make clean`**  
+  Removes the entire `build` directory and any compiled binaries, effectively cleaning up the project build artifacts.
+
+Additionally, you can use flags such as `make -B` to force rebuilds or `make -j4` to build in parallel for faster compilation.
 
 ## Usage
 
@@ -105,4 +130,3 @@ For more information, visit the [project repository](https://github.com/hiAndrew
 ---
 
 Happy searching, and thank you for using tsk!
-```
