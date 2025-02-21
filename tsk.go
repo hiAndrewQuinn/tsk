@@ -33,6 +33,9 @@ var finwordsTxt string
 //go:embed glosses.jsonl
 var glossesJsonl string
 
+//go:embed go-deeper.txt
+var goDeeperTxt string
+
 // ----------------------
 // Constants
 // ----------------------
@@ -165,6 +168,22 @@ func loadGlosses() (map[string][]Gloss, error) {
 }
 
 // ----------------------
+// Go Deeper Loader
+// ----------------------
+
+func loadDeeperPhrases() ([]string, error) {
+	scanner := bufio.NewScanner(strings.NewReader(goDeeperTxt))
+	var phrases []string
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line != "" {
+			phrases = append(phrases, line)
+		}
+	}
+	return phrases, scanner.Err()
+}
+
+// ----------------------
 // Utility: Open URL in default browser
 // ----------------------
 
@@ -188,9 +207,9 @@ func openBrowser(url string) error {
 // ----------------------
 
 func main() {
-  fmt.Println(fmt.Sprintf("tsk (%s) - Andrew's Pocket Finnish Dictionary\n", version))
-  fmt.Println("Project @ https://github.com/hiAndrewQuinn/tsk")
-  fmt.Println("Author  @ https://andrew-quinn.me/\n")
+	fmt.Println(fmt.Sprintf("tsk (%s) - Andrew's Pocket Finnish Dictionary\n", version))
+	fmt.Println("Project @ https://github.com/hiAndrewQuinn/tsk")
+	fmt.Println("Author  @ https://andrew-quinn.me/\n")
 	debugFlag := flag.Bool("debug", false, "print debug info")
 	flag.Parse()
 
@@ -235,6 +254,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	fmt.Println("Loading deeper lookup phrases from go-deeper.txt")
+	deeperPhrases, err := loadDeeperPhrases()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error loading deeper phrases:", err)
+		os.Exit(1)
+	}
+
 	fmt.Println("Starting the TUI. Thank you for your patience!")
 	app := tview.NewApplication()
 
@@ -242,7 +268,7 @@ func main() {
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEsc {
 			app.Stop()
-      fmt.Println("Stopping the TUI. Thank you for exiting gracefully!")
+			fmt.Println("Stopping the TUI. Thank you for exiting gracefully!")
 			return nil
 		}
 		return event
@@ -314,6 +340,36 @@ func main() {
 				formatted += fmt.Sprintf("%s (%s)\n\n", gloss.Word, gloss.Pos)
 				for _, meaning := range gloss.Meanings {
 					formatted += fmt.Sprintf("- %s\n", meaning)
+					// First-level deep lookup.
+					for _, phrase := range deeperPhrases {
+						prefix := phrase + " "
+						if strings.HasPrefix(meaning, prefix) {
+							target := strings.TrimSpace(strings.TrimPrefix(meaning, prefix))
+							if targetGlosses, ok := glosses[target]; ok {
+								formatted += fmt.Sprintf("  -> %s (%s)\n", targetGlosses[0].Word, targetGlosses[0].Pos)
+								for _, tg := range targetGlosses {
+									for _, tm := range tg.Meanings {
+										formatted += fmt.Sprintf("     - %s\n", tm)
+										// Second-level deep lookup.
+										for _, phrase2 := range deeperPhrases {
+											prefix2 := phrase2 + " "
+											if strings.HasPrefix(tm, prefix2) {
+												target2 := strings.TrimSpace(strings.TrimPrefix(tm, prefix2))
+												if targetGlosses2, ok := glosses[target2]; ok {
+													formatted += fmt.Sprintf("       -> %s (%s)\n", targetGlosses2[0].Word, targetGlosses2[0].Pos)
+													for _, tg2 := range targetGlosses2 {
+														for _, tm2 := range tg2.Meanings {
+															formatted += fmt.Sprintf("          - %s\n", tm2)
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
 				}
 			}
 			textView.SetText(formatted)
