@@ -2,8 +2,7 @@
 
 A tiny, fast, and portable Finnish-English dictionary that searches as you type.
 
-![recording](https://github.com/user-attachments/assets/e88fa507-b945-420b-a7db-05b8634c0750)
-
+![recording-ezgif com-speed](https://github.com/user-attachments/assets/eed841b8-1dbe-42dc-953e-429e6ee7104c)
 
 ## Overview
 
