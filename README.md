@@ -43,10 +43,10 @@ Visit the [release page](https://github.com/hiAndrewQuinn/tsk/releases) to downl
 
 ### Running with Docker
 
-You can build the Dockerfile with
+Assuming you have first run `make` as above, you can build a Docker image using the attached Dockerfile with
 
 ```bash
-docker build -t tsk .
+docker build -t tsk .    # make sure to run make first. Otherwise there is no program to copy!
 ```
 
 and run it with
