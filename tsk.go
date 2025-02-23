@@ -439,6 +439,12 @@ func main() {
 								log.Printf("displayGloss: Removing the parentheses. We will just search for '%s'.", target)
 							}
 						}
+						if idx := strings.Index(target, ";"); idx != -1 {
+							target = strings.TrimSpace(target[:idx])
+							if debug {
+								log.Printf("displayGloss: Removing the semicolon. We will just search for '%s'.", target)
+							}
+						}
 						if debug {
 							log.Printf("displayGloss: first-level deep lookup: target after trimming: '%s'", target)
 						}
@@ -467,6 +473,12 @@ func main() {
 											target2 = strings.TrimSpace(target2[:idx])
 											if debug {
 												log.Printf("displayGloss: Removing the parentheses. We will just search for '%s'.", target2)
+											}
+										}
+										if idx := strings.Index(target2, ";"); idx != -1 {
+											target2 = strings.TrimSpace(target2[:idx])
+											if debug {
+												log.Printf("displayGloss: Removing the semicolon. We will just search for '%s'.", target2)
 											}
 										}
 										if debug {
