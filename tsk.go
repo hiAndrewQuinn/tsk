@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 	"unsafe"
@@ -168,7 +169,7 @@ func loadGlosses() (map[string][]Gloss, error) {
 }
 
 // ----------------------
-// Go Deeper Loader
+// Go Deeper Loader and Prefix Lookup
 // ----------------------
 
 func loadDeeperPhrases() ([]string, error) {
@@ -181,6 +182,47 @@ func loadDeeperPhrases() ([]string, error) {
 		}
 	}
 	return phrases, scanner.Err()
+}
+
+var (
+	deeperPrefixMap     map[string]struct{}
+	deeperPrefixLengths []int
+)
+
+// initDeeperPrefixes builds a hashmap for lookups where the keys are each phrase
+// from go-deeper.txt with an appended space. It also builds a slice of key lengths,
+// sorted in descending order so that the longest (most precise) prefix is matched first.
+func initDeeperPrefixes() error {
+	phrases, err := loadDeeperPhrases()
+	if err != nil {
+		return err
+	}
+	deeperPrefixMap = make(map[string]struct{}, len(phrases))
+	lengthSet := make(map[int]struct{})
+	for _, phrase := range phrases {
+		key := phrase + " "
+		deeperPrefixMap[key] = struct{}{}
+		lengthSet[len(key)] = struct{}{}
+	}
+	for l := range lengthSet {
+		deeperPrefixLengths = append(deeperPrefixLengths, l)
+	}
+	// Sort lengths in descending order.
+	sort.Sort(sort.Reverse(sort.IntSlice(deeperPrefixLengths)))
+	return nil
+}
+
+// findLongestPrefix returns the longest matching prefix (with trailing space) found in s.
+func findLongestPrefix(s string) (string, bool) {
+	for _, l := range deeperPrefixLengths {
+		if len(s) >= l {
+			candidate := s[:l]
+			if _, ok := deeperPrefixMap[candidate]; ok {
+				return candidate, true
+			}
+		}
+	}
+	return "", false
 }
 
 // ----------------------
@@ -254,10 +296,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("Loading deeper lookup phrases from go-deeper.txt")
-	deeperPhrases, err := loadDeeperPhrases()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error loading deeper phrases:", err)
+	// Initialize deeper lookup prefixes.
+	fmt.Println("Initializing deeper lookup prefixes from go-deeper.txt")
+	if err := initDeeperPrefixes(); err != nil {
+		fmt.Fprintln(os.Stderr, "Error initializing deeper prefixes:", err)
 		os.Exit(1)
 	}
 
@@ -341,33 +383,23 @@ func main() {
 				for _, meaning := range gloss.Meanings {
 					formatted += fmt.Sprintf("- %s\n", meaning)
 
-					// First-level deep lookup.
-					for _, phrase := range deeperPhrases {
-						prefix := phrase + " "
-						if strings.HasPrefix(meaning, prefix) {
-							// Trim prefix and trailing punctuation.
-							target := strings.TrimRight(strings.TrimSpace(strings.TrimPrefix(meaning, prefix)), ".,:;!?")
+					// First-level deep lookup using hashmap-based prefix matching.
+					if prefix, found := findLongestPrefix(meaning); found {
+						target := strings.TrimRight(strings.TrimSpace(strings.TrimPrefix(meaning, prefix)), ".,:;!?")
+						if targetGlosses, ok := glosses[target]; ok {
+							for _, tg := range targetGlosses {
+								formatted += fmt.Sprintf("  ~> %s (%s)\n", tg.Word, tg.Pos)
+								for _, tm := range tg.Meanings {
+									formatted += fmt.Sprintf("     - %s\n", tm)
 
-							if targetGlosses, ok := glosses[target]; ok {
-								// Iterate over *all* glosses for `target`.
-								for _, tg := range targetGlosses {
-									formatted += fmt.Sprintf("  ~> %s (%s)\n", tg.Word, tg.Pos)
-									for _, tm := range tg.Meanings {
-										formatted += fmt.Sprintf("     - %s\n", tm)
-
-										// Second-level deep lookup.
-										for _, phrase2 := range deeperPhrases {
-											prefix2 := phrase2 + " "
-											if strings.HasPrefix(tm, prefix2) {
-												target2 := strings.TrimRight(strings.TrimSpace(strings.TrimPrefix(tm, prefix2)), ".,:;!?")
-												if targetGlosses2, ok := glosses[target2]; ok {
-													// Again, iterate over *all* second-level glosses.
-													for _, tg2 := range targetGlosses2 {
-														formatted += fmt.Sprintf("       ~> %s (%s)\n", tg2.Word, tg2.Pos)
-														for _, tm2 := range tg2.Meanings {
-															formatted += fmt.Sprintf("          - %s\n", tm2)
-														}
-													}
+									// Second-level deep lookup.
+									if prefix2, found2 := findLongestPrefix(tm); found2 {
+										target2 := strings.TrimRight(strings.TrimSpace(strings.TrimPrefix(tm, prefix2)), ".,:;!?")
+										if targetGlosses2, ok := glosses[target2]; ok {
+											for _, tg2 := range targetGlosses2 {
+												formatted += fmt.Sprintf("       ~> %s (%s)\n", tg2.Word, tg2.Pos)
+												for _, tm2 := range tg2.Meanings {
+													formatted += fmt.Sprintf("          - %s\n", tm2)
 												}
 											}
 										}
