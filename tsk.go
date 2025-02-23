@@ -213,19 +213,24 @@ func initDeeperPrefixes() error {
 	return nil
 }
 
-// findLongestPrefix returns the longest matching prefix (with trailing space) found in s.
 func findLongestPrefix(s string) (string, bool) {
-  log.Printf("findLongestPrefix: Checking for prefixes which match '%s'", s)
-	for _, l := range deeperPrefixLengths {
-		if len(s) >= l {
-			candidate := s[:l]
-      log.Printf("findLongestPrefix: Is '%s' in deeperPrefixMap?", candidate)
-			if _, ok := deeperPrefixMap[candidate]; ok {
-        log.Printf("findLongestPrefix: Yes! Returning '%s' from deeperPrefixMap.", candidate)
-				return candidate, true
-			}
+	log.Printf("findLongestPrefix: Checking for prefixes which match '%s'", s)
+
+	// Split the input string into words.
+	words := strings.Fields(s)
+
+	// Start with the full set of words and remove one word at a time.
+	for i := len(words); i > 0; i-- {
+		// Join the first i words with a space and add a trailing space.
+		candidate := strings.Join(words[:i], " ") + " "
+		log.Printf("findLongestPrefix: Is '%s' in deeperPrefixMap?", candidate)
+
+		if _, ok := deeperPrefixMap[candidate]; ok {
+			log.Printf("findLongestPrefix: Yes! Returning '%s' from deeperPrefixMap.", candidate)
+			return candidate, true
 		}
 	}
+
 	return "", false
 }
 
