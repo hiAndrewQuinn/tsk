@@ -418,7 +418,12 @@ func main() {
 						if *debugFlag {
 							log.Printf("displayGloss: first-level deep lookup: found prefix '%s' in meaning '%s'", prefix, meaning)
 						}
+
 						target := strings.TrimRight(strings.TrimSpace(strings.TrimPrefix(meaning, prefix)), ".,:;!?")
+						if idx := strings.Index(target, "("); idx != -1 {
+							target = strings.TrimSpace(target[:idx])
+							log.Printf("displayGloss: Removing the parentheses. We will just search for '%s'.", target)
+						}
 						if *debugFlag {
 							log.Printf("displayGloss: first-level deep lookup: target after trimming: '%s'", target)
 						}
@@ -443,6 +448,10 @@ func main() {
 											log.Printf("displayGloss: second-level deep lookup: found prefix '%s' in meaning '%s'", prefix2, tm)
 										}
 										target2 := strings.TrimRight(strings.TrimSpace(strings.TrimPrefix(tm, prefix2)), ".,:;!?")
+										if idx := strings.Index(target2, "("); idx != -1 {
+											target2 = strings.TrimSpace(target2[:idx])
+											log.Printf("displayGloss: Removing the parentheses. We will just search for '%s'.", target2)
+										}
 										if *debugFlag {
 											log.Printf("displayGloss: second-level deep lookup: target after trimming: '%s'", target2)
 										}
