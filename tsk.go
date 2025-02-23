@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"runtime"
@@ -214,10 +215,13 @@ func initDeeperPrefixes() error {
 
 // findLongestPrefix returns the longest matching prefix (with trailing space) found in s.
 func findLongestPrefix(s string) (string, bool) {
+  log.Printf("findLongestPrefix: Checking for prefixes which match '%s'", s)
 	for _, l := range deeperPrefixLengths {
 		if len(s) >= l {
 			candidate := s[:l]
+      log.Printf("findLongestPrefix: Is '%s' in deeperPrefixMap?", candidate)
 			if _, ok := deeperPrefixMap[candidate]; ok {
+        log.Printf("findLongestPrefix: Yes! Returning '%s' from deeperPrefixMap.", candidate)
 				return candidate, true
 			}
 		}
@@ -255,6 +259,18 @@ func main() {
 	debugFlag := flag.Bool("debug", false, "print debug info")
 	flag.Parse()
 
+	// If debug mode is enabled, open (or create) the debug log file in append mode.
+	if *debugFlag {
+		debugFile, err := os.OpenFile("debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error opening debug log: %v\n", err)
+			os.Exit(1)
+		}
+		defer debugFile.Close()
+		log.SetOutput(debugFile)
+		log.Println("Debug mode enabled")
+	}
+
 	// Load words from embedded data.
 	fmt.Println("Loading words from", WORD_LIST_FILE)
 	start := time.Now()
@@ -282,9 +298,9 @@ func main() {
 		estimatedPerNode := int(nodeStructSize) + estimatedMapOverhead
 		estimatedMemory := totalNodes * estimatedPerNode
 
-		fmt.Fprintf(os.Stderr, "Debug: Trie has %d nodes\n", totalNodes)
-		fmt.Fprintf(os.Stderr, "Debug: Estimated per-node memory usage: %d bytes\n", estimatedPerNode)
-		fmt.Fprintf(os.Stderr, "Debug: Estimated total memory usage: %d bytes (~%.2f MB)\n",
+		log.Printf("Debug: Trie has %d nodes\n", totalNodes)
+		log.Printf("Debug: Estimated per-node memory usage: %d bytes\n", estimatedPerNode)
+		log.Printf("Debug: Estimated total memory usage: %d bytes (~%.2f MB)\n",
 			estimatedMemory, float64(estimatedMemory)/(1024*1024))
 	}
 
@@ -373,38 +389,85 @@ func main() {
 	textView.SetTitle("Word Details")
 
 	displayGloss := func(word string) {
+		if *debugFlag {
+			log.Printf("displayGloss: called for word: %s", word)
+		}
 		if glossSlice, ok := glosses[word]; ok {
 			var formatted string
 			for i, gloss := range glossSlice {
+				if *debugFlag {
+					log.Printf("displayGloss: processing gloss[%d]: %s (%s)", i, gloss.Word, gloss.Pos)
+				}
 				if i > 0 {
 					formatted += "\n"
 				}
 				formatted += fmt.Sprintf("%s (%s)\n\n", gloss.Word, gloss.Pos)
 				for _, meaning := range gloss.Meanings {
+					if *debugFlag {
+						log.Printf("displayGloss: processing meaning: %s", meaning)
+					}
 					formatted += fmt.Sprintf("- %s\n", meaning)
 
 					// First-level deep lookup using hashmap-based prefix matching.
 					if prefix, found := findLongestPrefix(meaning); found {
+						if *debugFlag {
+							log.Printf("displayGloss: first-level deep lookup: found prefix '%s' in meaning '%s'", prefix, meaning)
+						}
 						target := strings.TrimRight(strings.TrimSpace(strings.TrimPrefix(meaning, prefix)), ".,:;!?")
+						if *debugFlag {
+							log.Printf("displayGloss: first-level deep lookup: target after trimming: '%s'", target)
+						}
 						if targetGlosses, ok := glosses[target]; ok {
+							if *debugFlag {
+								log.Printf("displayGloss: first-level deep lookup: found glosses for target '%s'", target)
+							}
 							for _, tg := range targetGlosses {
+								if *debugFlag {
+									log.Printf("displayGloss: processing first-level target gloss: %s (%s)", tg.Word, tg.Pos)
+								}
 								formatted += fmt.Sprintf("  ~> %s (%s)\n", tg.Word, tg.Pos)
 								for _, tm := range tg.Meanings {
+									if *debugFlag {
+										log.Printf("displayGloss: processing first-level target meaning: %s", tm)
+									}
 									formatted += fmt.Sprintf("     - %s\n", tm)
 
 									// Second-level deep lookup.
 									if prefix2, found2 := findLongestPrefix(tm); found2 {
+										if *debugFlag {
+											log.Printf("displayGloss: second-level deep lookup: found prefix '%s' in meaning '%s'", prefix2, tm)
+										}
 										target2 := strings.TrimRight(strings.TrimSpace(strings.TrimPrefix(tm, prefix2)), ".,:;!?")
+										if *debugFlag {
+											log.Printf("displayGloss: second-level deep lookup: target after trimming: '%s'", target2)
+										}
 										if targetGlosses2, ok := glosses[target2]; ok {
+											if *debugFlag {
+												log.Printf("displayGloss: second-level deep lookup: found glosses for target '%s'", target2)
+											}
 											for _, tg2 := range targetGlosses2 {
+												if *debugFlag {
+													log.Printf("displayGloss: processing second-level target gloss: %s (%s)", tg2.Word, tg2.Pos)
+												}
 												formatted += fmt.Sprintf("       ~> %s (%s)\n", tg2.Word, tg2.Pos)
 												for _, tm2 := range tg2.Meanings {
+													if *debugFlag {
+														log.Printf("displayGloss: processing second-level target meaning: %s", tm2)
+													}
 													formatted += fmt.Sprintf("          - %s\n", tm2)
 												}
+											}
+										} else {
+											if *debugFlag {
+												log.Printf("displayGloss: second-level deep lookup: no glosses found for target '%s'", target2)
 											}
 										}
 									}
 								}
+							}
+						} else {
+							if *debugFlag {
+								log.Printf("displayGloss: first-level deep lookup: no glosses found for target '%s'", target)
 							}
 						}
 					}
@@ -412,6 +475,9 @@ func main() {
 			}
 			textView.SetText(formatted)
 		} else {
+			if *debugFlag {
+				log.Printf("displayGloss: no gloss available for word: %s", word)
+			}
 			textView.SetText(fmt.Sprintf("%s\n\nNo gloss available.", word))
 		}
 	}

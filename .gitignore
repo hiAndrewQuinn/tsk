@@ -29,3 +29,6 @@ tsk
 
 # The build directory
 build/
+
+# Any logs we want to write, e.g. debug.log
+*.log
