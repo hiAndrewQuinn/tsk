@@ -19,6 +19,21 @@ A tiny, fast, and portable Finnish-English dictionary that searches as you type.
   - Windows (386, amd64)
 - **Single-file portability:** All of the dictionary info has been embedded right alongside the program itself, so you really do only need that one file. Plug and play!
 
+### Fun fact
+
+While the word you type will always be at the top of the list, the order of the other words or phrases you see is *not* deterministic. Repeated lookups of the same phrase *will* lead to different results:
+
+![animated](https://github.com/user-attachments/assets/4b340ca7-fcbd-4861-94c3-c845df40df70)
+
+
+Or if there are only a few possible completions anyway, their order may be rarranged:
+
+![animated](https://github.com/user-attachments/assets/3eb69170-36a8-4689-86a1-525059adff95)
+
+This is a happy accident of the randomly pruning trie data structure we built atop. We could force a deterministic order, but that would take all the fun out of it. 😼
+
+
+
 ## Installation
 
 You can either build `tsk` from source or download a pre-built binary from Releases.
