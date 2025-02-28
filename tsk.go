@@ -340,16 +340,6 @@ func main() {
 	fmt.Println("Starting the TUI. Thank you for your patience!")
 	app := tview.NewApplication()
 
-	// Global key capture: Pressing Esc exits.
-	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEsc {
-			app.Stop()
-			fmt.Println("Stopping the TUI. Thank you for exiting gracefully!")
-			return nil
-		}
-		return event
-	})
-
 	// -------------------------------
 	// Header (Top Line)
 	// -------------------------------
@@ -404,7 +394,9 @@ func main() {
 	textView.SetWrap(true)
 	textView.SetWordWrap(true)
 	textView.SetBorder(true)
-	textView.SetTitle("Word Details")
+	textView.SetTitle("Word Details (Tab/Shift-Tab to scroll)")
+
+	// (Removed the individual textView input capture for Tab/Shift-Tab scrolling.)
 
 	displayGloss := func(word string) {
 		if debug {
@@ -606,6 +598,34 @@ func main() {
 	footerFlex.
 		AddItem(footerLeft, 0, 1, false).
 		AddItem(footerRight, 40, 0, false)
+
+	// -------------------------------
+	// Global Key Capture: Tab/Shift+Tab scrolling without focus change.
+	// -------------------------------
+	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyTab:
+			// Scroll down one line in the textView.
+			currentRow, currentCol := textView.GetScrollOffset()
+			textView.ScrollTo(currentRow+1, currentCol)
+			return nil // swallow event
+		case tcell.KeyBacktab:
+			// Scroll up one line in the textView.
+			currentRow, currentCol := textView.GetScrollOffset()
+			newRow := currentRow - 1
+			if newRow < 0 {
+				newRow = 0
+			}
+			textView.ScrollTo(newRow, currentCol)
+			return nil // swallow event
+		case tcell.KeyEsc:
+			app.Stop()
+			fmt.Println("Stopping the TUI. Thank you for exiting gracefully!")
+			return nil
+		default:
+			return event
+		}
+	})
 
 	// -------------------------------
 	// Main Layout
