@@ -23,7 +23,7 @@ import (
 // ----------------------
 // Version Variable
 // ----------------------
-const version = "v0.0.3"
+const version = "v0.0.4"
 
 // ----------------------
 // Global Debug Flag
