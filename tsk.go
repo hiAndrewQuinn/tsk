@@ -26,6 +26,20 @@ import (
 const version = "v0.0.4"
 
 // ----------------------
+// Help Text Constant
+// ----------------------
+const helpText = `[gray]
+Keybindings:
+  Esc        = Exit
+  Enter      = Clear search
+  Up/Down    = Scroll word list
+
+  Tab        = Scroll Word Details forward
+  Shift-Tab  = Scroll Word Details backward
+[white]
+`
+
+// ----------------------
 // Global Debug Flag
 // ----------------------
 var debug bool
@@ -395,8 +409,8 @@ func main() {
 	textView.SetWordWrap(true)
 	textView.SetBorder(true)
 	textView.SetTitle("Word Details (Tab/Shift-Tab to scroll)")
-
-	// (Removed the individual textView input capture for Tab/Shift-Tab scrolling.)
+	// Set initial help text in gray.
+	textView.SetText(helpText)
 
 	displayGloss := func(word string) {
 		if debug {
