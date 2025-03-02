@@ -23,7 +23,7 @@ import (
 // ----------------------
 // Version Variable
 // ----------------------
-const version = "v0.0.4"
+const version = "v0.0.5"
 
 // ----------------------
 // Help Text Constant
