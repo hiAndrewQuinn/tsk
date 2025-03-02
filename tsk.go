@@ -462,12 +462,12 @@ func main() {
 								if debug {
 									log.Printf("displayGloss: processing first-level target gloss: %s (%s)", tg.Word, tg.Pos)
 								}
-								formatted += fmt.Sprintf("  ~> %s (%s)\n", tg.Word, tg.Pos)
+								formatted += fmt.Sprintf("[lightgray]  ~> %s (%s)[white]\n", tg.Word, tg.Pos)
 								for _, tm := range tg.Meanings {
 									if debug {
 										log.Printf("displayGloss: processing first-level target meaning: %s", tm)
 									}
-									formatted += fmt.Sprintf("     - %s\n", tm)
+									formatted += fmt.Sprintf("[lightgray]     - %s[white]\n", tm)
 
 									// Second-level deep lookup.
 									if prefix2, found2 := findLongestPrefix(tm); found2 {
@@ -498,12 +498,12 @@ func main() {
 												if debug {
 													log.Printf("displayGloss: processing second-level target gloss: %s (%s)", tg2.Word, tg2.Pos)
 												}
-												formatted += fmt.Sprintf("       ~> %s (%s)\n", tg2.Word, tg2.Pos)
+												formatted += fmt.Sprintf("[gray]       ~> %s (%s)[white]\n", tg2.Word, tg2.Pos)
 												for _, tm2 := range tg2.Meanings {
 													if debug {
 														log.Printf("displayGloss: processing second-level target meaning: %s", tm2)
 													}
-													formatted += fmt.Sprintf("          - %s\n", tm2)
+													formatted += fmt.Sprintf("[gray]          - %s[white]\n", tm2)
 												}
 											}
 										} else {
