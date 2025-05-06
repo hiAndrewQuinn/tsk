@@ -2,8 +2,8 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"encoding/csv"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -762,7 +762,7 @@ func main() {
 			ts := time.Now().Format("2006-01-02-15-04-05")
 			base := fmt.Sprintf("tsk-marked_%s", ts)
 			jsonFile := base + ".jsonl"
-			txtFile  := base + ".txt"
+			txtFile := base + ".txt"
 
 			// --- JSONL dump ---
 			fj, err := os.Create(jsonFile)
@@ -780,14 +780,14 @@ func main() {
 							fmt.Fprintf(os.Stderr,
 								"Error marshaling gloss for %s: %v\n",
 								wform, err,
-								)
+							)
 							continue
 						}
 						if _, err := fj.Write(append(line, '\n')); err != nil {
 							fmt.Fprintf(os.Stderr,
 								"Error writing to %s: %v\n",
 								jsonFile, err,
-								)
+							)
 							os.Exit(1)
 						}
 					}
