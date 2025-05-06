@@ -453,8 +453,8 @@ func main() {
 
 	displayGloss := func(word string) {
 		if debug {
+			log.Printf("displayGloss: called for word: %s", word)
 		}
-		log.Printf("displayGloss: called for word: %s", word)
 
 		_, isMarked := marked[word]
 		if isMarked {
