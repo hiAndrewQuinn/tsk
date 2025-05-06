@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"encoding/csv"
 	"flag"
 	"fmt"
 	"log"
@@ -29,13 +30,48 @@ const version = "v0.0.5"
 // Help Text Constant
 // ----------------------
 const helpText = `[gray]
-Keybindings:
-  Esc        = Exit
-  Enter      = Clear search
-  Up/Down    = Scroll word list
+	Keybindings:
+	  Esc        = Exit
+	  Enter      = Clear search
+	  Up/Down    = Scroll word list
 
-  Tab        = Scroll Word Details forward
-  Shift-Tab  = Scroll Word Details backward
+	  Tab        = Scroll Word Details forward
+	  Shift-Tab  = Scroll Word Details backward
+
+	  [yellow]Control-S[gray]  = [yellow]Mark[gray]/unmark words. All marked words will be saved upon Esc to a text file.
+	  [green]Control-L[gray]  = [green]List[gray] marked words. 
+	  [pink]Control-H[gray]  = Show this [pink]help[gray] text again.
+	[white]
+	`
+
+const finnishFlag = `[green]
+	                            ..
+                        _,-(.;)
+                    _,-',gtP""
+                _,-',gtP",'|
+            _,-',gtP" ,-" :|
+        _,-',gtP" _,a"   .'|
+itz _,-',gtP"_,aS####    : |
+_,-',gtP;-'"~. i#H##9   :' |
+,gtP"   |   :  jH###j  ,. _|
+"       |  :   QH##H( .;sQ#|
+        |:'.   #####k,6####|
+        |..   ;##H#H#######|
+        ":_,J#############H|
+         |H#H####H#####F'~ |
+         |H#####HH###f".   |
+        .J###PFH#H##':     |
+        :#F".  #H###. '    |
+        | :'   H####l.    .|
+        |.'    #####h      |
+        |.     V####C    ':|
+        ":     t####Q   .:.|
+         |    ."###H#    ._|
+         |     :####H_,-'""
+         |   '.,#JF""
+        :'  .:,-'
+        |_.,-'
+        "
 [white]
 `
 
@@ -322,6 +358,9 @@ func main() {
 	buildDuration := time.Since(start)
 	fmt.Printf("Built trie in %v\n", buildDuration)
 
+	// Track words the user explicitly marks.
+	marked := make(map[string]struct{})
+
 	// Debug info.
 	if debug {
 		totalNodes := trie.CountNodes()
@@ -408,16 +447,31 @@ func main() {
 	textView.SetWrap(true)
 	textView.SetWordWrap(true)
 	textView.SetBorder(true)
-	textView.SetTitle("Word Details (Tab/Shift-Tab to scroll)")
+	textView.SetTitle("Word Details (Tab/Shift-Tab to scroll, Ctrl-S to mark)")
 	// Set initial help text in gray.
 	textView.SetText(helpText)
 
 	displayGloss := func(word string) {
 		if debug {
-			log.Printf("displayGloss: called for word: %s", word)
 		}
+		log.Printf("displayGloss: called for word: %s", word)
+
+		_, isMarked := marked[word]
+		if isMarked {
+			log.Printf("displayGloss: %s is marked.", word)
+			textView.SetTitle("Word Details (Tab/Shift-Tab to scroll, Ctrl-S to unmark)")
+			textView.SetBorderColor(tcell.ColorYellow)
+			textView.SetTitleColor(tcell.ColorYellow)
+		} else {
+			log.Printf("displayGloss: %s is NOT marked.", word)
+			textView.SetTitle("Word Details (Tab/Shift-Tab to scroll, Ctrl-S to mark)")
+			textView.SetBorderColor(tcell.ColorWhite)
+			textView.SetTitleColor(tcell.ColorWhite)
+		}
+
 		if glossSlice, ok := glosses[word]; ok {
 			var formatted string
+
 			for i, gloss := range glossSlice {
 				if debug {
 					log.Printf("displayGloss: processing gloss[%d]: %s (%s)", i, gloss.Word, gloss.Pos)
@@ -618,6 +672,65 @@ func main() {
 	// -------------------------------
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
+		case tcell.KeyCtrlH:
+			textView.SetTitle("Word Details (Tab/Shift-Tab to scroll, Ctrl-S to mark)")
+			textView.SetBorderColor(tcell.ColorWhite)
+			textView.SetTitleColor(tcell.ColorWhite)
+			textView.SetText(helpText)
+			return nil
+		case tcell.KeyCtrlL:
+			textView.SetBorderColor(tcell.ColorGreen)
+			textView.SetTitleColor(tcell.ColorGreen)
+
+			count := len(marked)
+			if count == 0 {
+				textView.SetTitle("Marked words list empty. Kotimaa itkee...")
+				textView.SetText(finnishFlag)
+			} else {
+				textView.SetTitle(fmt.Sprintf("Listing marked words. (count: %d)", count))
+				textView.SetBorderColor(tcell.ColorGreen)
+				textView.SetTitleColor(tcell.ColorGreen)
+
+				// build a sorted slice of the set
+				var words []string
+				for w := range marked {
+					words = append(words, w)
+				}
+				sort.Strings(words)
+
+				// render them in green
+				builder := strings.Builder{}
+				builder.WriteString("[green]")
+				for _, w := range words {
+					builder.WriteString(w)
+					builder.WriteByte('\n')
+				}
+				builder.WriteString("[white]")
+				textView.SetText(builder.String())
+			}
+			return nil
+		case tcell.KeyCtrlS:
+			if list.GetItemCount() == 0 {
+				textView.SetText("\n  [red]You need to search for something before you can mark or unmark it.[white]")
+				textView.SetTitle("Word Details (Tab/Shift-Tab to scroll, Ctrl-S to mark)")
+				textView.SetBorderColor(tcell.ColorRed)
+				textView.SetTitleColor(tcell.ColorRed)
+				return nil
+			}
+			idx := list.GetCurrentItem()
+			word, _ := list.GetItemText(idx)
+
+			inputField.SetText(word)
+
+			if _, present := marked[word]; present {
+				delete(marked, word)
+				log.Printf("Unmarking %s.", word)
+			} else {
+				marked[word] = struct{}{}
+				log.Printf("Marking %s.", word)
+			}
+			updateList(inputField.GetText())
+			return nil
 		case tcell.KeyTab:
 			// Scroll down one line in the textView.
 			currentRow, currentCol := textView.GetScrollOffset()
@@ -635,6 +748,78 @@ func main() {
 		case tcell.KeyEsc:
 			app.Stop()
 			fmt.Println("Stopping the TUI. Thank you for exiting gracefully!")
+
+			// 1) If nothing’s marked, just exit.
+			if len(marked) == 0 {
+				return nil
+			}
+
+			// 2) Build base filename with timestamp
+			ts := time.Now().Format("2006-01-02-15-04-05")
+			base := fmt.Sprintf("tsk-marked_%s", ts)
+			jsonFile := base + ".jsonl"
+			txtFile  := base + ".txt"
+
+			// --- JSONL dump ---
+			fj, err := os.Create(jsonFile)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error creating %s: %v\n", jsonFile, err)
+				os.Exit(1)
+			}
+			defer fj.Close()
+
+			for wform := range marked {
+				if glossSlice, ok := glosses[wform]; ok {
+					for _, gloss := range glossSlice {
+						line, err := json.Marshal(gloss)
+						if err != nil {
+							fmt.Fprintf(os.Stderr,
+								"Error marshaling gloss for %s: %v\n",
+								wform, err,
+								)
+							continue
+						}
+						if _, err := fj.Write(append(line, '\n')); err != nil {
+							fmt.Fprintf(os.Stderr,
+								"Error writing to %s: %v\n",
+								jsonFile, err,
+								)
+							os.Exit(1)
+						}
+					}
+				}
+			}
+			fmt.Printf("Saved %d words’ gloss entries to %s\n", len(marked), jsonFile)
+
+			// --- TXT (one-column CSV) dump ---
+			// We’ll use encoding/csv to get proper quoting, but it's just one column.
+			ft, err := os.Create(txtFile)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error creating %s: %v\n", txtFile, err)
+				os.Exit(1)
+			}
+			defer ft.Close()
+
+			cw := csv.NewWriter(ft)
+			defer cw.Flush()
+
+			// Header
+			cw.Write([]string{"Base Form"})
+
+			// Collect & sort keys
+			var words []string
+			for w := range marked {
+				words = append(words, w)
+			}
+			sort.Strings(words)
+
+			// One row per word
+			for _, w := range words {
+				cw.Write([]string{w})
+			}
+
+			fmt.Printf("Saved %d marked words to %s\n", len(words), txtFile)
+
 			return nil
 		default:
 			return event

@@ -32,3 +32,6 @@ build/
 
 # Any logs we want to write, e.g. debug.log
 *.log
+
+# Marked words logs
+tsk-marked*
