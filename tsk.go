@@ -728,10 +728,14 @@ func main() {
 
 			if _, present := marked[word]; present {
 				delete(marked, word)
-				log.Printf("Unmarking %s.", word)
+				if debug {
+					log.Printf("Unmarking %s.", word)
+				}
 			} else {
 				marked[word] = struct{}{}
-				log.Printf("Marking %s.", word)
+				if debug {
+				 log.Printf("Marking %s.", word)
+				}
 			}
 			updateList(inputField.GetText())
 			return nil
