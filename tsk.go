@@ -458,12 +458,16 @@ func main() {
 
 		_, isMarked := marked[word]
 		if isMarked {
-			log.Printf("displayGloss: %s is marked.", word)
+			if debug {
+				log.Printf("displayGloss: %s is marked.", word)
+			}
 			textView.SetTitle("Word Details (Tab/Shift-Tab to scroll, Ctrl-S to unmark)")
 			textView.SetBorderColor(tcell.ColorYellow)
 			textView.SetTitleColor(tcell.ColorYellow)
 		} else {
-			log.Printf("displayGloss: %s is NOT marked.", word)
+			if debug {
+				log.Printf("displayGloss: %s is NOT marked.", word)
+			}
 			textView.SetTitle("Word Details (Tab/Shift-Tab to scroll, Ctrl-S to mark)")
 			textView.SetBorderColor(tcell.ColorWhite)
 			textView.SetTitleColor(tcell.ColorWhite)
