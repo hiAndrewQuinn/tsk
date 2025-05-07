@@ -42,6 +42,7 @@ const helpText = `[gray]
 	Tab        = Scroll Word Details forward
 	Shift-Tab  = Scroll Word Details backward
 
+	[teal]Control-T[gray]  = Show [teal]example sentences[gray], from Tatoeba for the selected word.
 	[yellow]Control-S[gray]  = [yellow]Mark[gray]/unmark words. All marked words will be saved upon Esc to a text file.
 	[green]Control-L[gray]  = [green]List[gray] marked words. 
 	[pink]Control-H[gray]  = Show this [pink]help[gray] text again.
@@ -781,6 +782,8 @@ func main() {
 			// 3) build output
 			var buf strings.Builder
 			found := false
+
+			buf.WriteString("[white]Example sentences are from https://tatoeba.org and under CC BY 2.0 FR.\n\n")
 
 			for rows.Next() {
 				found = true
