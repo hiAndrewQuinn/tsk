@@ -5,6 +5,11 @@ PLATFORMS = linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 wind
 OUTPUT_DIR = build
 MAIN = tsk.go
 
+# Database and TSV
+DB       = example-sentences.sqlite
+TSV      = example-sentences.tsv
+DB_BUILDER = build-example-sentences-db.sh
+
 # Extract version from tsk.go (e.g. "v0.0.1") and replace dots with dashes
 VERSION := $(shell grep -m1 'const version' tsk.go | cut -d'"' -f2 | sed 's/\./-/g')
 
@@ -13,11 +18,17 @@ INSTALL_DIR ?= /usr/local/bin
 
 .PHONY: all clean install
 
-all: words.txt $(OUTPUT_DIR) build-all
+# Now all depends on generating words.txt, the output dir, the DB, and the Go builds
+all: words.txt $(OUTPUT_DIR) $(DB) build-all
 
 # Generate words.txt from glosses.jsonl before building
 words.txt: glosses.jsonl
 	jq '.word' glosses.jsonl | sort -u > words.txt
+
+# Rule to rebuild the SQLite FTS DB from TSV
+$(DB): $(TSV) $(DB_BUILDER)
+	@echo "Rebuilding SQLite FTS DB: $@ from $<"
+	@./$(DB_BUILDER)
 
 $(OUTPUT_DIR):
 	mkdir -p $(OUTPUT_DIR)
@@ -44,4 +55,5 @@ install: all
 	cp $(OUTPUT_DIR)/tsk_$(shell go env GOOS)_$(shell go env GOARCH)_$(VERSION) $(INSTALL_DIR)/tsk
 
 clean:
-	rm -rf $(OUTPUT_DIR)
+	rm -rf $(OUTPUT_DIR) $(DB)
+

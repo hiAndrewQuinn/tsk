@@ -35,3 +35,7 @@ build/
 
 # Marked words logs
 tsk-marked*
+
+# Do NOT commit SQLite libraries. Which we use!
+*.sqlite
+*.db

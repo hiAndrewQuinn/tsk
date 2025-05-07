@@ -2,10 +2,14 @@ package main
 
 import (
 	"bufio"
+	"database/sql"
 	"encoding/csv"
 	"encoding/json"
 	"flag"
 	"fmt"
+	_ "github.com/knaka/go-sqlite3-fts5" // <— enables FTS5 in mattn/go-sqlite3
+	_ "github.com/mattn/go-sqlite3"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -31,49 +35,48 @@ const version = "v0.0.5"
 // ----------------------
 const helpText = `[gray]
 	Keybindings:
-	  Esc        = Exit
-	  Enter      = Clear search
-	  Up/Down    = Scroll word list
+	Esc        = Exit
+	Enter      = Clear search
+	Up/Down    = Scroll word list
 
-	  Tab        = Scroll Word Details forward
-	  Shift-Tab  = Scroll Word Details backward
+	Tab        = Scroll Word Details forward
+	Shift-Tab  = Scroll Word Details backward
 
-	  [yellow]Control-S[gray]  = [yellow]Mark[gray]/unmark words. All marked words will be saved upon Esc to a text file.
-	  [green]Control-L[gray]  = [green]List[gray] marked words. 
-	  [pink]Control-H[gray]  = Show this [pink]help[gray] text again.
+	[yellow]Control-S[gray]  = [yellow]Mark[gray]/unmark words. All marked words will be saved upon Esc to a text file.
+	[green]Control-L[gray]  = [green]List[gray] marked words. 
+	[pink]Control-H[gray]  = Show this [pink]help[gray] text again.
 	[white]
 	`
 
-const finnishFlag = `[green]
-	                            ..
+const finnishFlag = `[gray]
                         _,-(.;)
-                    _,-',gtP""
-                _,-',gtP",'|
-            _,-',gtP" ,-" :|
-        _,-',gtP" _,a"   .'|
-itz _,-',gtP"_,aS####    : |
-_,-',gtP;-'"~. i#H##9   :' |
-,gtP"   |   :  jH###j  ,. _|
-"       |  :   QH##H( .;sQ#|
-        |:'.   #####k,6####|
-        |..   ;##H#H#######|
-        ":_,J#############H|
-         |H#H####H#####F'~ |
-         |H#####HH###f".   |
-        .J###PFH#H##':     |
-        :#F".  #H###. '    |
-        | :'   H####l.    .|
-        |.'    #####h      |
-        |.     V####C    ':|
-        ":     t####Q   .:.|
-         |    ."###H#    ._|
-         |     :####H_,-'""
-         |   '.,#JF""
+                    _,-',###""
+                _,-',###",'|
+            _,-',###" ,-" :|
+        _,-',###" _,#"   .'|
+### _,-',###"_,######    : |
+_,-',###;-'"~. #####9   :' |
+,###"   |   :  ######  ,. _|
+"       |  :   #####( .;###|
+        |:'.   ######,6####|
+        |..   ;############|
+        ":_,###############|
+         |##############'~ |
+         |############".   |
+        .###########':     |
+        :##".  #####. '    |
+        | :'   ######.    .|
+        |.'    ######      |
+        |.     ######    ':|
+        ":     ######   .:.|
+         |    ."#####    ._|
+         |     :#####_,-'""
+         |   '.,###""
         :'  .:,-'
         |_.,-'
         "
-[white]
-`
+	[white]
+	`
 
 // ----------------------
 // Global Debug Flag
@@ -92,6 +95,25 @@ var glossesJsonl string
 
 //go:embed go-deeper.txt
 var goDeeperTxt string
+
+//go:embed example-sentences.sqlite
+var embeddedDB []byte
+var exampleDB *sql.DB
+
+// Schema for the embeddedDB, at least as of 2025-05-07 :
+//
+// CREATE VIRTUAL TABLE sentences USING fts5(
+//   finnish,
+//   english
+// )
+// /* sentences(finnish,english) */;
+// CREATE TABLE IF NOT EXISTS 'sentences_data'(id INTEGER PRIMARY KEY, block BLOB);
+// CREATE TABLE IF NOT EXISTS 'sentences_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID;
+// CREATE TABLE IF NOT EXISTS 'sentences_content'(id INTEGER PRIMARY KEY, c0, c1);
+// CREATE TABLE IF NOT EXISTS 'sentences_docsize'(id INTEGER PRIMARY KEY, sz BLOB);
+// CREATE TABLE IF NOT EXISTS 'sentences_config'(k PRIMARY KEY, v) WITHOUT ROWID;
+//
+// We pretty much only use this for full-text searches for example sentences.
 
 // ----------------------
 // Constants
@@ -390,6 +412,23 @@ func main() {
 		os.Exit(1)
 	}
 
+	// dump embeddedDB bytes into a temporary file for SQL lookups
+	tmp, err := ioutil.TempFile("", "tsksentences-*.sqlite")
+	if err != nil {
+		log.Fatalf("could not create temp file: %v", err)
+	}
+	defer tmp.Close()
+
+	if _, err := tmp.Write(embeddedDB); err != nil {
+		log.Fatalf("could not write embedded DB: %v", err)
+	}
+
+	// open it via sqlite3
+	exampleDB, err := sql.Open("sqlite3", tmp.Name()+"?_foreign_keys=on")
+	if err != nil {
+		log.Fatalf("could not open example sentences DB: %v", err)
+	}
+
 	fmt.Println("Starting the TUI. Thank you for your patience!")
 	app := tview.NewApplication()
 
@@ -686,6 +725,80 @@ func main() {
 	// -------------------------------
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
+		case tcell.KeyCtrlT:
+			if list.GetItemCount() == 0 {
+				textView.SetBorderColor(tcell.ColorTeal)
+				textView.SetTitleColor(tcell.ColorTeal)
+				textView.SetTitle("No word selected. Kotimaa itkee...")
+				textView.SetText(finnishFlag)
+				return nil
+			}
+
+			idx := list.GetCurrentItem()
+			word, _ := list.GetItemText(idx)
+
+			// 1a) if the search bar is empty, show teal “please enter something” message
+			if strings.TrimSpace(word) == "" {
+				textView.SetBorderColor(tcell.ColorTeal)
+				textView.SetTitleColor(tcell.ColorTeal)
+				textView.SetTitle("No word entered. Kotimaa itkee...")
+				textView.SetText(finnishFlag)
+				textView.SetText("[teal]No word entered. Please type something in the search bar.[white]")
+				return nil
+			}
+
+			const q = `
+        SELECT finnish, english
+        FROM sentences
+        WHERE sentences MATCH ? 
+    `
+			rows, err := exampleDB.Query(q, word)
+			if err != nil {
+				textView.SetText(fmt.Sprintf("Error querying examples: %v", err))
+				textView.SetBorderColor(tcell.ColorRed)
+				return nil
+			}
+			defer rows.Close()
+
+			// 3) build output
+			var buf strings.Builder
+			found := false
+
+			for rows.Next() {
+				found = true
+
+				var fin, eng string
+				if err := rows.Scan(&fin, &eng); err != nil {
+					continue
+				}
+
+				// Finnish in teal (no per-word highlight)
+				buf.WriteString("[teal]" + fin + "\n")
+
+				// English in pink
+				buf.WriteString("[pink]" + eng + "\n\n")
+			}
+
+			if err := rows.Err(); err != nil {
+				buf.WriteString(fmt.Sprintf("\nError reading rows: %v", err))
+			}
+
+			// 3a) if nothing was found, show a special message
+			if !found {
+				textView.SetBorderColor(tcell.ColorTeal)
+				textView.SetTitleColor(tcell.ColorTeal)
+				textView.SetTitle("No examples found")
+				textView.SetText("[red]No Tatoeba example sentences found.[white]")
+				return nil
+			}
+
+			// 4) display results
+			textView.SetTitle(fmt.Sprintf("Examples for '%s' (Tab/Shift-Tab to scroll)", word))
+			textView.SetBorderColor(tcell.ColorTeal)
+			textView.SetTitleColor(tcell.ColorTeal)
+			textView.SetText(buf.String())
+
+			return nil
 		case tcell.KeyCtrlH:
 			textView.SetTitle("Word Details (Tab/Shift-Tab to scroll, Ctrl-S to mark)")
 			textView.SetBorderColor(tcell.ColorWhite)
