@@ -720,6 +720,17 @@ func main() {
 					builder.WriteByte('\n')
 				}
 				builder.WriteString("[white]")
+
+				builder.WriteByte('\n')
+				builder.WriteByte('\n')
+				builder.WriteString("[gray]Caution: The exported files [red]do NOT[gray] include any \"go-deeper\" words or phrases.")
+				builder.WriteByte('\n')
+				builder.WriteByte('\n')
+				builder.WriteString("[gray]For example, marking '[yellow]omenan[gray]' [red]will NOT[gray] include any info about '[yellow]omena[gray]'.")
+				builder.WriteByte('\n')
+				builder.WriteByte('\n')
+				builder.WriteString("If you want those go-deeper phrases in the export, please add them separately.[white]")
+
 				textView.SetText(builder.String())
 			}
 			return nil
