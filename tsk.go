@@ -7,10 +7,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	_ "github.com/knaka/go-sqlite3-fts5" // <— enables FTS5 in mattn/go-sqlite3
-	_ "github.com/mattn/go-sqlite3"
 	"io/ioutil"
 	"log"
+	_ "modernc.org/sqlite" // pure-Go SQLite driver with FTS5 support
 	"os"
 	"os/exec"
 	"runtime"
@@ -423,8 +422,8 @@ func main() {
 		log.Fatalf("could not write embedded DB: %v", err)
 	}
 
-	// open it via sqlite3
-	exampleDB, err := sql.Open("sqlite3", tmp.Name()+"?_foreign_keys=on")
+	// open it via sqlite
+	exampleDB, err := sql.Open("sqlite", tmp.Name()+"?_foreign_keys=on")
 	if err != nil {
 		log.Fatalf("could not open example sentences DB: %v", err)
 	}
