@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 	"unsafe"
 
 	_ "embed"
@@ -333,6 +334,22 @@ func openBrowser(url string) error {
 		return fmt.Errorf("unsupported platform")
 	}
 	return cmd.Start()
+}
+
+// ----------------------
+// Utility: Clean up SQL terms properly
+//
+
+func cleanTerm(s string) string {
+	// Trim off any leading/trailing non-letters
+	start, end := 0, len(s)
+	for start < end && !unicode.IsLetter(rune(s[start])) {
+		start++
+	}
+	for end > start && !unicode.IsLetter(rune(s[end-1])) {
+		end--
+	}
+	return s[start:end]
 }
 
 // ----------------------
@@ -746,12 +763,14 @@ func main() {
 				return nil
 			}
 
+			phrase := `"` + cleanTerm(word) + `"`
+
 			const q = `
         SELECT finnish, english
         FROM sentences
         WHERE sentences MATCH ? 
     `
-			rows, err := exampleDB.Query(q, word)
+			rows, err := exampleDB.Query(q, phrase)
 			if err != nil {
 				textView.SetText(fmt.Sprintf("Error querying examples: %v", err))
 				textView.SetBorderColor(tcell.ColorRed)
