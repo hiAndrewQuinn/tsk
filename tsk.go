@@ -589,8 +589,18 @@ func main() {
 		}
 	}
 
-	list.SetChangedFunc(func(index int, mainText string, secondaryText string, shortcut rune) {
+	list.SetChangedFunc(func(idx int, mainText string, _ string, _ rune) {
+		// first show the gloss as before:
 		displayGloss(mainText)
+
+		// then pick selection style:
+		if _, marked := marked[mainText]; marked {
+			// “reverse-video” in yellow:
+			list.SetSelectedBackgroundColor(tcell.ColorYellow)
+		} else {
+			// back to the List’s defaults
+			list.SetSelectedBackgroundColor(tcell.ColorWhite)
+		}
 	})
 
 	inputField.SetChangedFunc(func(text string) {
@@ -734,7 +744,7 @@ func main() {
 			} else {
 				marked[word] = struct{}{}
 				if debug {
-				 log.Printf("Marking %s.", word)
+					log.Printf("Marking %s.", word)
 				}
 			}
 			updateList(inputField.GetText())
