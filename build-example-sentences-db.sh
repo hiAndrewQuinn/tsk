@@ -20,7 +20,8 @@ sqlite3 "$DB" <<SQL
 -- create the full-text search virtual table
 CREATE VIRTUAL TABLE sentences USING fts5(
   finnish,
-  english
+  english,
+  tokenize = "unicode61 remove_diacritics 0"
 );
 
 -- import the TSV (will use the current separator)
