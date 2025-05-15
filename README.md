@@ -4,6 +4,13 @@ A tiny, fast, and portable Finnish-English dictionary that searches as you type.
 
 ![recording-ezgif com-speed](https://github.com/user-attachments/assets/eed841b8-1dbe-42dc-953e-429e6ee7104c)
 
+## [See the latest release in action on Youtube](https://www.youtube.com/watch?v=MSa3P491mNw)
+
+This image hyperlinks to the Youtube video " `tsk` (tasusanakirja, Finnish-English pocket dictionary) - v0.0.6 ".
+[![Watch the video](https://img.youtube.com/vi/MSa3P491mNw/maxresdefault.jpg)](https://www.youtube.com/watch?v=MSa3P491mNw)
+
+v0.0.6 can be downloaded from the [Releases page](https://github.com/hiAndrewQuinn/tsk/releases) as a single file, for Linux, MacOSX and Windows, just like all the previous releases!
+
 ## Overview
 
 **tsk** (*taskusanakirja*, "pocket dictionary") is a lightweight Finnish-English dictionary tool written in Go. It leverages a custom trie data structure to provide real-time search results and displays word definitions instantly in a sleek terminal user interface built with [tcell](https://github.com/gdamore/tcell) and [tview](https://github.com/rivo/tview). With pre-built binaries for multiple platforms, tsk is designed and has been tested to work seamlessly on Linux, Windows, and macOS.
