@@ -317,11 +317,11 @@ func getDeeperGlosses(text string, glosses map[string][]Gloss, level int) string
 	// Define formatting based on recursion level to match the original output.
 	var glossFormat, meaningFormat string
 	if level == 1 {
-		glossFormat = "[lightgray]  ~> %s (%s)[white]\n"
-		meaningFormat = "[lightgray]      - %s[white]\n"
+		glossFormat = "[lightgray]  ~> %s (%s)[white]\n"
+		meaningFormat = "[lightgray]      - %s[white]\n"
 	} else { // level == 2
-		glossFormat = "[gray]         ~> %s (%s)[white]\n"
-		meaningFormat = "[gray]            - %s[white]\n"
+		glossFormat = "[gray]         ~> %s (%s)[white]\n"
+		meaningFormat = "[gray]            - %s[white]\n"
 	}
 
 	// Main logic: find prefix, extract target, look up glosses, and format.
@@ -486,175 +486,230 @@ func cleanTerm(s string) string {
 // ----------------------
 
 // showMeaningSearchModal creates and displays a modal window for searching word meanings.
-func showMeaningSearchModal(pages *tview.Pages, glosses map[string][]Gloss, app *tview.Application) {
+// This modal is designed to look and feel like the main application window, with a
+// two-pane layout for search/results and details.
+// MODIFIED: Added mainInputField to the function signature to allow interaction with the main view.
+func showMeaningSearchModal(pages *tview.Pages, glosses map[string][]Gloss, app *tview.Application, mainInputField *tview.InputField) {
 	if debug {
 		log.Println("showMeaningSearchModal: Function called.")
 	}
-	// Results text view
 
-	if debug {
-		log.Println("Constructing the resultsView.")
-	}
+	// --- NEW: Help text specific to this modal ---
+	const reverseFindHelpText = `[gray]
+	Keybindings:
 
-	resultsView := tview.NewTextView().
+	Enter       = Search for the English term.
+	Up/Down     = Scroll result list.
+
+	[green]Enter on a result[gray] in the list to select it and return to the main view.
+	[red]Enter on an empty search bar[gray] to close this window and return to the main view.
+
+	[white]
+	`
+
+	// --- Components ---
+
+	// Left Pane: Search Input & Results List
+	searchInput := tview.NewInputField().
+		SetLabel("English term: ").
+		SetFieldWidth(30)
+
+	resultsList := tview.NewList().
+		ShowSecondaryText(false)
+
+	// Right Pane: Details Display
+	detailsView := tview.NewTextView().
 		SetDynamicColors(true).
 		SetScrollable(true).
-		SetChangedFunc(func() { // Redraw on content change
-			app.Draw()
-		})
-	resultsView.SetText("Enter an English term and press Search.")
-	resultsView.SetBorder(true)
+		SetWrap(true).
+		SetWordWrap(true)
+	detailsView.SetBorder(true).
+		SetTitle("Word Details (Tab/Shift-Tab to scroll)")
+	// NEW: Set the initial help text for this modal.
+	detailsView.SetText(reverseFindHelpText)
 
-	if debug {
-		log.Println("showMeaningSearchModal: resultsView constructed.")
-	}
+	// --- Main Content Layout (The two panes) ---
+	contentFlex := tview.NewFlex().
+		SetDirection(tview.FlexColumn).
+		AddItem(
+			tview.NewFlex().SetDirection(tview.FlexRow).
+				AddItem(searchInput, 3, 1, true).
+				AddItem(resultsList, 0, 4, false),
+			0, 1, true,
+		).
+		AddItem(detailsView, 0, 2, false)
 
-	if debug {
-		log.Println("showMeaningSearchModal: Constructing the Search Term form.")
-	}
+	// --- Header ---
+	headerLeft := tview.NewTextView().
+		SetText(fmt.Sprintf("tsk (%s) - Reverse-Find by English Meaning", version)).
+		SetTextAlign(tview.AlignLeft).
+		SetTextColor(tcell.ColorBlack)
+	headerLeft.SetBackgroundColor(tcell.ColorLightGray)
 
-	// Search input form
-	form := tview.NewForm()
-	form.AddInputField("Search Term:", "", 40, nil, nil)
+	headerRight := tview.NewButton("[::u]https://github.com/hiAndrewQuinn/tsk[::-]")
+	headerRight.SetLabelColor(tcell.ColorWhite)
+	headerRight.SetSelectedFunc(func() {
+		if err := openBrowser("https://github.com/hiAndrewQuinn/tsk"); err != nil {
+			fmt.Fprintf(os.Stderr, "Error opening browser: %v\n", err)
+		}
+	})
 
-	if debug {
-		log.Println("showMeaningSearchModal: New form constructed.")
-	}
+	headerFlex := tview.NewFlex().SetDirection(tview.FlexColumn)
+	headerFlex.SetBackgroundColor(tcell.ColorLightGray)
+	headerFlex.
+		AddItem(headerLeft, 0, 1, false).
+		AddItem(headerRight, 40, 0, false)
 
-	if debug {
-		log.Println("showMeaningSearchModal: Constructing the NewFlex modal layout.")
-	}
+	// --- Footer ---
+	footerLeft := tview.NewTextView().
+		SetText("Esc to close. Enter to search. Up/Down to scroll results.").
+		SetTextAlign(tview.AlignLeft).
+		SetTextColor(tcell.ColorBlack)
+	footerLeft.SetBackgroundColor(tcell.ColorLightGray)
 
-	// The whole modal layout
-	modal := tview.NewFlex().
+	footerRight := tview.NewButton("[::u]https://andrew-quinn.me/[::-]")
+	footerRight.SetLabelColor(tcell.ColorWhite)
+	footerRight.SetSelectedFunc(func() {
+		if err := openBrowser("https://andrew-quinn.me/"); err != nil {
+			fmt.Fprintf(os.Stderr, "Error opening browser: %v\n", err)
+		}
+	})
+
+	footerFlex := tview.NewFlex().SetDirection(tview.FlexColumn)
+	footerFlex.SetBackgroundColor(tcell.ColorLightGray)
+	footerFlex.
+		AddItem(footerLeft, 0, 1, false).
+		AddItem(footerRight, 40, 0, false)
+
+	// --- Final Modal Layout (mimicking mainFlex) ---
+	modalLayout := tview.NewFlex().
 		SetDirection(tview.FlexRow).
-		AddItem(form, 3, 1, true).        // Form takes 3 units of space and has focus
-		AddItem(resultsView, 0, 4, false) // Results view takes 4 parts of the remaining space
+		AddItem(headerFlex, 1, 0, false).
+		AddItem(nil, 1, 0, false). // Spacer
+		AddItem(contentFlex, 0, 1, true).
+		AddItem(nil, 1, 0, false). // Spacer
+		AddItem(footerFlex, 1, 0, false)
 
-	modal.SetBorder(true).SetTitle("Search Meanings (Press Enter to Search, Esc to Close)")
+	// --- Logic & Event Handlers ---
 
-	if debug {
-		log.Println("showMeaningSearchModal: MewFlex modal layout constructed.")
-	}
-
-	if debug {
-		log.Println("showMeaningSearchModal: Defining searchAction logic..")
-	}
-
-	// Define search logic
 	searchAction := func() {
 		if debug {
 			log.Println("showMeaningSearchModal: searchAction triggered.")
 		}
-		query := form.GetFormItem(0).(*tview.InputField).GetText()
-		if debug {
-			log.Printf("showMeaningSearchModal: Raw query from form: '%s'", query)
-		}
-		query = strings.ToLower(strings.TrimSpace(query))
+		query := strings.ToLower(strings.TrimSpace(searchInput.GetText()))
 		if debug {
 			log.Printf("showMeaningSearchModal: Cleaned query: '%s'", query)
 		}
 
+		resultsList.Clear()
+		detailsView.Clear().ScrollToBeginning()
+
+		// This check is now redundant because SetDoneFunc handles the empty case,
+		// but it's harmless to leave as a safeguard.
 		if query == "" {
-			if debug {
-				log.Println("showMeaningSearchModal: Query is empty, setting message and returning.")
-			}
-			resultsView.SetText("[yellow]Please enter a search term.[white]")
+			detailsView.SetText(reverseFindHelpText)
 			return
 		}
 
-		// Perform the search
-		if debug {
-			log.Println("showMeaningSearchModal: Starting search through glosses...")
-		}
-		foundMap := make(map[string]struct{}) // To store unique words
+		foundMap := make(map[string]struct{})
 		for word, glossSlice := range glosses {
 			for _, gloss := range glossSlice {
 				for _, meaning := range gloss.Meanings {
-					// Using ToLower on both for case-insensitive search
 					if strings.Contains(strings.ToLower(meaning), query) {
-						if debug {
-							log.Printf("showMeaningSearchModal: Match found! Query '%s' is in meaning '%s' for word '%s'.", query, meaning, word)
-						}
 						foundMap[word] = struct{}{}
-						break // Found in this gloss, no need to check other meanings for it
+						break
 					}
 				}
 			}
 		}
-		if debug {
-			log.Printf("showMeaningSearchModal: Search complete. Found %d unique matches.", len(foundMap))
-		}
 
-		// Display results
 		if len(foundMap) == 0 {
-			if debug {
-				log.Printf("showMeaningSearchModal: No matches found. Displaying 'not found' message.")
-			}
-			resultsView.SetText(fmt.Sprintf("[red]No words found with meaning containing '[darkred:%s]'.[white]", query))
+			detailsView.SetText(fmt.Sprintf("[red]No words found with meaning containing '[darkred:%s]'.[white]", query))
 		} else {
-			if debug {
-				log.Printf("showMeaningSearchModal: Found %d matches. Building and displaying results string.", len(foundMap))
-			}
-			// sort the keys for consistent output
 			matches := make([]string, 0, len(foundMap))
 			for word := range foundMap {
 				matches = append(matches, word)
 			}
 			sort.Strings(matches)
 
-			var builder strings.Builder
-			builder.WriteString(fmt.Sprintf("[green]Found %d words for '[darkgreen:%s]':\n\n[white]", len(matches), query))
 			for _, match := range matches {
-				builder.WriteString(match + "\n")
+				resultsList.AddItem(match, "", 0, nil)
 			}
-			resultsView.SetText(builder.String())
+			resultsList.SetCurrentItem(0)
 		}
 	}
 
-	if debug {
-		log.Println("showMeaningSearchModal:  searchAction logic defined.")
-	}
-
-	if debug {
-		log.Println("showMeaningSearchModal:  Adding the searchAction button.")
-	}
-
-	form.AddButton("Search", searchAction).
-		AddButton("Close", func() {
-			if debug {
-				log.Println("showMeaningSearchModal: 'Close' button clicked.")
-			}
-			pages.RemovePage("meaningSearch")
-		})
-
-	if debug {
-		log.Println("showMeaningSearchModal:  searchAction button added.")
-	}
-
-	// Set the 'done' function for the input field to trigger the search on Enter
-	form.GetFormItem(0).(*tview.InputField).SetDoneFunc(func(key tcell.Key) {
-		if key == tcell.KeyEnter {
-			if debug {
-				log.Println("showMeaningSearchModal: Enter key pressed in input field, triggering searchAction.")
-			}
-			searchAction()
-		}
+	resultsList.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
+		glossText := generateGlossText(mainText, glosses)
+		detailsView.SetText(glossText).ScrollToBeginning()
 	})
 
-	// This function will be called when the user hits Esc on the form
-	form.SetCancelFunc(func() {
-		if debug {
-			log.Println("showMeaningSearchModal: Escape key pressed, closing modal.")
-		}
+	// NEW: Add a selection handler to the list.
+	// When the user presses Enter on a list item, this function is called.
+	resultsList.SetSelectedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
+		// Set the main application's search bar text to the selected word.
+		mainInputField.SetText(mainText)
+		// Close the modal.
 		pages.RemovePage("meaningSearch")
+		// Set focus back to the main input field for a seamless transition.
+		app.SetFocus(mainInputField)
 	})
 
+	// MODIFIED: Updated the DoneFunc to handle exiting on an empty search.
+	searchInput.SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEnter {
+			query := strings.TrimSpace(searchInput.GetText())
+			if query == "" {
+				// If the search bar is empty, just close the modal.
+				pages.RemovePage("meaningSearch")
+			} else {
+				// Otherwise, perform the search.
+				searchAction()
+			}
+		}
+	})
+
+	searchInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		// MODIFIED: Give focus to the list on Down/Up arrow keys to enable selection.
+		switch event.Key() {
+		case tcell.KeyEsc:
+			pages.RemovePage("meaningSearch")
+			return nil
+		case tcell.KeyDown:
+			app.SetFocus(resultsList)
+			cur := resultsList.GetCurrentItem()
+			if cur < resultsList.GetItemCount()-1 {
+				resultsList.SetCurrentItem(cur + 1)
+			}
+			return nil
+		case tcell.KeyUp:
+			app.SetFocus(resultsList)
+			cur := resultsList.GetCurrentItem()
+			if cur > 0 {
+				resultsList.SetCurrentItem(cur - 1)
+			}
+			return nil
+		case tcell.KeyTab:
+			row, col := detailsView.GetScrollOffset()
+			detailsView.ScrollTo(row+1, col)
+			return nil
+		case tcell.KeyBacktab:
+			row, col := detailsView.GetScrollOffset()
+			newRow := row - 1
+			if newRow < 0 {
+				newRow = 0
+			}
+			detailsView.ScrollTo(newRow, col)
+			return nil
+		}
+		return event
+	})
+
+	// --- FIX #1: Add the modal to the pages view to make it visible. ---
 	if debug {
 		log.Println("showMeaningSearchModal: Adding 'meaningSearch' page to pages container.")
 	}
-	// Add the modal to the pages, making it visible and focused
-	pages.AddPage("meaningSearch", modal, true, true)
+	pages.AddPage("meaningSearch", modalLayout, true, true)
 }
 
 // ----------------------
@@ -1016,7 +1071,7 @@ func main() {
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyCtrlF:
-			showMeaningSearchModal(pages, glosses, app)
+			showMeaningSearchModal(pages, glosses, app, inputField)
 			return nil
 		case tcell.KeyCtrlT:
 			if list.GetItemCount() == 0 {
@@ -1281,6 +1336,7 @@ func main() {
 		// Bottom row (footer)
 		AddItem(footerFlex, 1, 0, false)
 
+	// --- FIX #2 & #3: Add the mainFlex as the "main" page, and remove the invalid modalLayout call.
 	pages.AddPage("main", mainFlex, true, true)
 
 	if err := app.SetRoot(pages, true).Run(); err != nil {
