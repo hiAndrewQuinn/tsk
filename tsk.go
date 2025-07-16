@@ -248,6 +248,75 @@ func loadGlosses() (map[string][]Gloss, error) {
 	return glosses, scanner.Err()
 }
 
+// generateGlossText creates the formatted string for a word's details.
+// This is used by both the main view and the reverse-find modal.
+func generateGlossText(word string, glosses map[string][]Gloss) string {
+	if glossSlice, ok := glosses[word]; ok {
+		var formatted string
+
+		for i, gloss := range glossSlice {
+			if debug {
+				log.Printf("generateGlossText: processing gloss[%d]: %s (%s)", i, gloss.Word, gloss.Pos)
+			}
+			if i > 0 {
+				formatted += "\n"
+			}
+			formatted += fmt.Sprintf("[white]%s [yellow](%s)[white]\n\n", gloss.Word, gloss.Pos)
+			for _, meaning := range gloss.Meanings {
+				if debug {
+					log.Printf("generateGlossText: processing meaning: %s", meaning)
+				}
+				formatted += fmt.Sprintf("- %s\n", meaning)
+
+				// First-level deep lookup
+				if prefix, found := findLongestPrefix(meaning); found {
+					target := strings.TrimRight(strings.TrimSpace(strings.TrimPrefix(meaning, prefix)), ".,:;!?")
+					if idx := strings.Index(target, "("); idx != -1 {
+						target = strings.TrimSpace(target[:idx])
+					}
+					if idx := strings.Index(target, ";"); idx != -1 {
+						target = strings.TrimSpace(target[:idx])
+					}
+
+					if targetGlosses, ok := glosses[target]; ok {
+						for _, tg := range targetGlosses {
+							formatted += fmt.Sprintf("[lightgray]  ~> %s (%s)[white]\n", tg.Word, tg.Pos)
+							for _, tm := range tg.Meanings {
+								formatted += fmt.Sprintf("[lightgray]      - %s[white]\n", tm)
+
+								// Second-level deep lookup
+								if prefix2, found2 := findLongestPrefix(tm); found2 {
+									target2 := strings.TrimRight(strings.TrimSpace(strings.TrimPrefix(tm, prefix2)), ".,:;!?")
+									if idx := strings.Index(target2, "("); idx != -1 {
+										target2 = strings.TrimSpace(target2[:idx])
+									}
+									if idx := strings.Index(target2, ";"); idx != -1 {
+										target2 = strings.TrimSpace(target2[:idx])
+									}
+									if targetGlosses2, ok := glosses[target2]; ok {
+										for _, tg2 := range targetGlosses2 {
+											formatted += fmt.Sprintf("[gray]         ~> %s (%s)[white]\n", tg2.Word, tg2.Pos)
+											for _, tm2 := range tg2.Meanings {
+												formatted += fmt.Sprintf("[gray]            - %s[white]\n", tm2)
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		return formatted
+	}
+
+	if debug {
+		log.Printf("generateGlossText: no gloss available for word: %s", word)
+	}
+	return fmt.Sprintf("%s\n\nNo gloss available.", word)
+}
+
 // ----------------------
 // Go Deeper Loader and Prefix Lookup
 // ----------------------
@@ -690,6 +759,7 @@ func main() {
 			log.Printf("displayGloss: called for word: %s", word)
 		}
 
+		// Handle marking visuals (title and border color)
 		_, isMarked := marked[word]
 		if isMarked {
 			if debug {
@@ -707,120 +777,9 @@ func main() {
 			textView.SetTitleColor(tcell.ColorWhite)
 		}
 
-		if glossSlice, ok := glosses[word]; ok {
-			var formatted string
-
-			for i, gloss := range glossSlice {
-				if debug {
-					log.Printf("displayGloss: processing gloss[%d]: %s (%s)", i, gloss.Word, gloss.Pos)
-				}
-				if i > 0 {
-					formatted += "\n"
-				}
-				formatted += fmt.Sprintf("%s (%s)\n\n", gloss.Word, gloss.Pos)
-				for _, meaning := range gloss.Meanings {
-					if debug {
-						log.Printf("displayGloss: processing meaning: %s", meaning)
-					}
-					formatted += fmt.Sprintf("- %s\n", meaning)
-
-					// First-level deep lookup using hashmap-based prefix matching.
-					if prefix, found := findLongestPrefix(meaning); found {
-						if debug {
-							log.Printf("displayGloss: first-level deep lookup: found prefix '%s' in meaning '%s'", prefix, meaning)
-						}
-
-						target := strings.TrimRight(strings.TrimSpace(strings.TrimPrefix(meaning, prefix)), ".,:;!?")
-						if idx := strings.Index(target, "("); idx != -1 {
-							target = strings.TrimSpace(target[:idx])
-							if debug {
-								log.Printf("displayGloss: Removing the parentheses. We will just search for '%s'.", target)
-							}
-						}
-						if idx := strings.Index(target, ";"); idx != -1 {
-							target = strings.TrimSpace(target[:idx])
-							if debug {
-								log.Printf("displayGloss: Removing the semicolon. We will just search for '%s'.", target)
-							}
-						}
-						if debug {
-							log.Printf("displayGloss: first-level deep lookup: target after trimming: '%s'", target)
-						}
-						if targetGlosses, ok := glosses[target]; ok {
-							if debug {
-								log.Printf("displayGloss: first-level deep lookup: found glosses for target '%s'", target)
-							}
-							for _, tg := range targetGlosses {
-								if debug {
-									log.Printf("displayGloss: processing first-level target gloss: %s (%s)", tg.Word, tg.Pos)
-								}
-								formatted += fmt.Sprintf("[lightgray]  ~> %s (%s)[white]\n", tg.Word, tg.Pos)
-								for _, tm := range tg.Meanings {
-									if debug {
-										log.Printf("displayGloss: processing first-level target meaning: %s", tm)
-									}
-									formatted += fmt.Sprintf("[lightgray]     - %s[white]\n", tm)
-
-									// Second-level deep lookup.
-									if prefix2, found2 := findLongestPrefix(tm); found2 {
-										if debug {
-											log.Printf("displayGloss: second-level deep lookup: found prefix '%s' in meaning '%s'", prefix2, tm)
-										}
-										target2 := strings.TrimRight(strings.TrimSpace(strings.TrimPrefix(tm, prefix2)), ".,:;!?")
-										if idx := strings.Index(target2, "("); idx != -1 {
-											target2 = strings.TrimSpace(target2[:idx])
-											if debug {
-												log.Printf("displayGloss: Removing the parentheses. We will just search for '%s'.", target2)
-											}
-										}
-										if idx := strings.Index(target2, ";"); idx != -1 {
-											target2 = strings.TrimSpace(target2[:idx])
-											if debug {
-												log.Printf("displayGloss: Removing the semicolon. We will just search for '%s'.", target2)
-											}
-										}
-										if debug {
-											log.Printf("displayGloss: second-level deep lookup: target after trimming: '%s'", target2)
-										}
-										if targetGlosses2, ok := glosses[target2]; ok {
-											if debug {
-												log.Printf("displayGloss: second-level deep lookup: found glosses for target '%s'", target2)
-											}
-											for _, tg2 := range targetGlosses2 {
-												if debug {
-													log.Printf("displayGloss: processing second-level target gloss: %s (%s)", tg2.Word, tg2.Pos)
-												}
-												formatted += fmt.Sprintf("[gray]       ~> %s (%s)[white]\n", tg2.Word, tg2.Pos)
-												for _, tm2 := range tg2.Meanings {
-													if debug {
-														log.Printf("displayGloss: processing second-level target meaning: %s", tm2)
-													}
-													formatted += fmt.Sprintf("[gray]          - %s[white]\n", tm2)
-												}
-											}
-										} else {
-											if debug {
-												log.Printf("displayGloss: second-level deep lookup: no glosses found for target '%s'", target2)
-											}
-										}
-									}
-								}
-							}
-						} else {
-							if debug {
-								log.Printf("displayGloss: first-level deep lookup: no glosses found for target '%s'", target)
-							}
-						}
-					}
-				}
-			}
-			textView.SetText(formatted)
-		} else {
-			if debug {
-				log.Printf("displayGloss: no gloss available for word: %s", word)
-			}
-			textView.SetText(fmt.Sprintf("%s\n\nNo gloss available.", word))
-		}
+		// Generate the content using the new helper and set it
+		glossText := generateGlossText(word, glosses)
+		textView.SetText(glossText)
 	}
 
 	list.SetChangedFunc(func(idx int, mainText string, _ string, _ rune) {
