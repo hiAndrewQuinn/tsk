@@ -248,6 +248,57 @@ func loadGlosses() (map[string][]Gloss, error) {
 	return glosses, scanner.Err()
 }
 
+// getDeeperGlosses is a recursive helper that looks for linkable phrases in a meaning string,
+// fetches their definitions, and formats them with the appropriate indentation and color
+// based on the recursion depth. It recurses one level deep to handle nested definitions.
+func getDeeperGlosses(text string, glosses map[string][]Gloss, level int) string {
+	// Base case: We only go two levels deep (level 1 and level 2).
+	if level > 2 {
+		return ""
+	}
+
+	var builder strings.Builder
+
+	// Local helper for cleaning the target word found after a prefix.
+	extractTarget := func(meaning, prefix string) string {
+		target := strings.TrimRight(strings.TrimSpace(strings.TrimPrefix(meaning, prefix)), ".,:;!?")
+		if idx := strings.Index(target, "("); idx != -1 {
+			target = strings.TrimSpace(target[:idx])
+		}
+		if idx := strings.Index(target, ";"); idx != -1 {
+			target = strings.TrimSpace(target[:idx])
+		}
+		return target
+	}
+
+	// Define formatting based on recursion level to match the original output.
+	var glossFormat, meaningFormat string
+	if level == 1 {
+		glossFormat = "[lightgray]  ~> %s (%s)[white]\n"
+		meaningFormat = "[lightgray]      - %s[white]\n"
+	} else { // level == 2
+		glossFormat = "[gray]         ~> %s (%s)[white]\n"
+		meaningFormat = "[gray]            - %s[white]\n"
+	}
+
+	// Main logic: find prefix, extract target, look up glosses, and format.
+	if prefix, found := findLongestPrefix(text); found {
+		target := extractTarget(text, prefix)
+		if targetGlosses, ok := glosses[target]; ok {
+			for _, tg := range targetGlosses {
+				builder.WriteString(fmt.Sprintf(glossFormat, tg.Word, tg.Pos))
+				for _, tm := range tg.Meanings {
+					builder.WriteString(fmt.Sprintf(meaningFormat, tm))
+					// Recursive call for the next level deep.
+					builder.WriteString(getDeeperGlosses(tm, glosses, level+1))
+				}
+			}
+		}
+	}
+
+	return builder.String()
+}
+
 // generateGlossText creates the formatted string for a word's details.
 // This is used by both the main view and the reverse-find modal.
 func generateGlossText(word string, glosses map[string][]Gloss) string {
@@ -268,44 +319,8 @@ func generateGlossText(word string, glosses map[string][]Gloss) string {
 				}
 				formatted += fmt.Sprintf("- %s\n", meaning)
 
-				// First-level deep lookup
-				if prefix, found := findLongestPrefix(meaning); found {
-					target := strings.TrimRight(strings.TrimSpace(strings.TrimPrefix(meaning, prefix)), ".,:;!?")
-					if idx := strings.Index(target, "("); idx != -1 {
-						target = strings.TrimSpace(target[:idx])
-					}
-					if idx := strings.Index(target, ";"); idx != -1 {
-						target = strings.TrimSpace(target[:idx])
-					}
-
-					if targetGlosses, ok := glosses[target]; ok {
-						for _, tg := range targetGlosses {
-							formatted += fmt.Sprintf("[lightgray]  ~> %s (%s)[white]\n", tg.Word, tg.Pos)
-							for _, tm := range tg.Meanings {
-								formatted += fmt.Sprintf("[lightgray]      - %s[white]\n", tm)
-
-								// Second-level deep lookup
-								if prefix2, found2 := findLongestPrefix(tm); found2 {
-									target2 := strings.TrimRight(strings.TrimSpace(strings.TrimPrefix(tm, prefix2)), ".,:;!?")
-									if idx := strings.Index(target2, "("); idx != -1 {
-										target2 = strings.TrimSpace(target2[:idx])
-									}
-									if idx := strings.Index(target2, ";"); idx != -1 {
-										target2 = strings.TrimSpace(target2[:idx])
-									}
-									if targetGlosses2, ok := glosses[target2]; ok {
-										for _, tg2 := range targetGlosses2 {
-											formatted += fmt.Sprintf("[gray]         ~> %s (%s)[white]\n", tg2.Word, tg2.Pos)
-											for _, tm2 := range tg2.Meanings {
-												formatted += fmt.Sprintf("[gray]            - %s[white]\n", tm2)
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
+				// Call the recursive helper function to get all deeper glosses.
+				formatted += getDeeperGlosses(meaning, glosses, 1)
 			}
 		}
 		return formatted
