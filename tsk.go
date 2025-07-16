@@ -48,6 +48,13 @@ const helpText = `[gray]
 	[green]Control-L[gray]  = [green]List[gray] marked words. 
 	[cyan]Control-F[gray]  = [cyan]Reverse-find[gray] words by searching their English definitions.
 	[pink]Control-H[gray]  = Show this [pink]help[gray] text again.
+
+	[red]Control-R[gray]  = [red]Report a bug[gray] on GitHub.com. [red]Opens your web browser[gray] to
+
+	                   [red]https://github.com/hiAndrewQuinn/tsk/issues/new[gray]
+
+	             Provide as many details as you can. Response is on a best-effort basis.
+
 	[white]
 	`
 
@@ -1106,6 +1113,16 @@ func main() {
 	// -------------------------------
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
+		case tcell.KeyCtrlR:
+			if debug {
+				log.Println("Ctrl-R detected, opening bug report URL.")
+			}
+			url := "https://github.com/hiAndrewQuinn/tsk/issues/new"
+			if err := openBrowser(url); err != nil {
+				log.Printf("Error opening browser for bug report: %v", err)
+			}
+			return nil // Consume the event so it's not processed further.
+
 		case tcell.KeyCtrlF:
 			showMeaningSearchModal(pages, glosses, app, inputField)
 			return nil
