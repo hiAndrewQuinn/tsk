@@ -12,6 +12,7 @@ import (
 	_ "modernc.org/sqlite" // pure-Go SQLite driver with FTS5 support
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -132,6 +133,38 @@ const (
 )
 
 // ----------------------
+// Custom Usage Function
+// ----------------------
+
+func printCustomUsage() {
+	// The main header is printed regardless, so we start with the usage details.
+	fmt.Fprintf(os.Stderr, "A terminal-based Finnish dictionary. Interactive TUI by default,\n\n")
+	fmt.Fprintf(os.Stderr, "but can also be run as a normal CLI application.\n\n")
+
+	fmt.Fprintf(os.Stderr, "USAGE:\n")
+	fmt.Fprintf(os.Stderr, "  tsk [flags]\n")
+	fmt.Fprintf(os.Stderr, "  tsk [flags] [word...]\n")
+	fmt.Fprintf(os.Stderr, "  <command> | tsk [flags]\n\n")
+
+	fmt.Fprintf(os.Stderr, "MODES OF OPERATION:\n")
+	fmt.Fprintf(os.Stderr, "  Interactive TUI (default):\n")
+	fmt.Fprintf(os.Stderr, "    Run without arguments or piped input to launch the interactive interface.\n")
+	fmt.Fprintf(os.Stderr, "    $ tsk\n\n")
+
+	fmt.Fprintf(os.Stderr, "  Direct CLI (by arguments):\n")
+	fmt.Fprintf(os.Stderr, "    Provide one or more words as arguments to get their definitions printed to stdout.\n")
+	fmt.Fprintf(os.Stderr, "    $ tsk hei maailma\n\n")
+
+	fmt.Fprintf(os.Stderr, "  Direct CLI (by piped input):\n")
+	fmt.Fprintf(os.Stderr, "    Pipe text into the program to look up all words from the input stream.\n")
+	fmt.Fprintf(os.Stderr, "    $ echo \"terve taas\" | tsk\n\n")
+
+	fmt.Fprintf(os.Stderr, "FLAGS:\n")
+	// This helper function prints the default flag information.
+	flag.PrintDefaults()
+}
+
+// ----------------------
 // Trie Data Structure
 // ----------------------
 
@@ -223,6 +256,16 @@ func loadWords() ([]string, error) {
 		}
 	}
 	return words, scanner.Err()
+}
+
+// ----------------------
+// Utility: Strip tview color tags
+// ----------------------
+
+func stripColorTags(s string) string {
+	// This regex matches any sequence like `[<color>]` or `[<color>:<bgcolor>]`
+	re := regexp.MustCompile(`\[[^\]]*\]`)
+	return re.ReplaceAllString(s, "")
 }
 
 // ----------------------
@@ -623,6 +666,8 @@ func main() {
 	fmt.Println("Project @ https://github.com/hiAndrewQuinn/tsk")
 	fmt.Println("Author  @ https://andrew-quinn.me/\n")
 
+	flag.Usage = printCustomUsage
+
 	// Initialize global debug flag.
 	flag.BoolVar(&debug, "debug", false, "print debug info")
 	flag.Parse()
@@ -638,6 +683,82 @@ func main() {
 		log.SetOutput(debugFile)
 		log.Println("Debug mode enabled")
 	}
+
+	// -------------------------------
+	// NEW: CLI Mode Logic
+	// -------------------------------
+	var searchTerms []string
+
+	// First, check for non-flag arguments.
+	if len(flag.Args()) > 0 {
+		searchTerms = flag.Args()
+		if debug {
+			log.Printf("CLI mode activated via arguments: %v", searchTerms)
+		}
+	} else {
+		// If no arguments, check if data is being piped via stdin.
+		stat, _ := os.Stdin.Stat()
+		if (stat.Mode() & os.ModeCharDevice) == 0 {
+			if debug {
+				log.Println("CLI mode activated via stdin pipe.")
+			}
+			bytes, err := ioutil.ReadAll(os.Stdin)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error reading from stdin: %v\n", err)
+				os.Exit(1)
+			}
+			// Assume space-separated words from the piped input.
+			searchTerms = strings.Fields(string(bytes))
+		}
+	}
+
+	// If we have terms from either args or stdin, run in CLI mode.
+	if len(searchTerms) > 0 {
+		// Suppress the loading messages for piped input to keep the output clean.
+		if len(flag.Args()) > 0 {
+			fmt.Println("Loading word definitions...")
+			fmt.Println("Initializing deeper lookup prefixes...")
+		}
+
+		glosses, err := loadGlosses()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error loading glosses:", err)
+			os.Exit(1)
+		}
+
+		if err := initDeeperPrefixes(); err != nil {
+			fmt.Fprintln(os.Stderr, "Error initializing deeper prefixes:", err)
+			os.Exit(1)
+		}
+
+		fmt.Println("===")
+
+		// Loop over all provided search terms.
+		for i, term := range searchTerms {
+			// Check if the word exists.
+			if _, ok := glosses[term]; ok {
+				// Generate the gloss text, strip color tags, and print.
+				glossText := generateGlossText(term, glosses)
+				cleanText := stripColorTags(glossText)
+				fmt.Println(cleanText)
+			} else {
+				fmt.Printf("'%s' not found.\n", term)
+			}
+
+			// Print a separator between results, but not after the last one.
+			if i < len(searchTerms)-1 {
+				fmt.Println("---")
+			}
+		}
+
+		fmt.Println("===")
+
+		// Exit successfully, skipping the TUI.
+		os.Exit(0)
+	}
+	// -------------------------------
+	// End of CLI Mode Logic
+	// -------------------------------
 
 	// Load words from embedded data.
 	fmt.Println("Loading words from", WORD_LIST_FILE)
