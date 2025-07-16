@@ -481,10 +481,6 @@ func cleanTerm(s string) string {
 	return s[start:end]
 }
 
-// ----------------------
-// Meaning Search Modal
-// ----------------------
-
 // showMeaningSearchModal creates and displays a modal window for searching word meanings.
 // This modal is designed to look and feel like the main application window, with a
 // two-pane layout for search/results and details.
@@ -507,26 +503,61 @@ func showMeaningSearchModal(pages *tview.Pages, glosses map[string][]Gloss, app 
 	[white]
 	`
 
+	// --- NEW: Color Theme for Modal ---
+	const (
+		// Main background set to a dark violet.
+		modalBgColor = tcell.ColorDarkViolet
+
+		// Header/footer set to an even darker purple for contrast.
+		modalHeaderFooterBg = tcell.ColorIndigo
+		modalDetailsBg      = tcell.ColorMidnightBlue
+
+		// Text remains white for readability.
+		modalPrimaryColor = tcell.ColorGold
+
+		// Accents (borders, titles) are now a lighter purple.
+		modalAccentColor = tcell.ColorPlum
+
+		// Input field background is a muted purple.
+		modalFieldBgColor = tcell.ColorRebeccaPurple
+
+		// Selection colors for the list remain high-contrast.
+		modalListSelectBg   = tcell.ColorIndigo
+		modalListSelectText = tcell.ColorGold
+	)
+
 	// --- Components ---
 
 	// Left Pane: Search Input & Results List
 	searchInput := tview.NewInputField().
 		SetLabel("English term: ").
+		SetLabelColor(modalAccentColor).            // NEW: Color
+		SetFieldBackgroundColor(modalFieldBgColor). // NEW: Color
+		SetFieldTextColor(modalPrimaryColor).       // NEW: Color
 		SetFieldWidth(30)
 
 	resultsList := tview.NewList().
-		ShowSecondaryText(false)
+		ShowSecondaryText(false).
+		SetSelectedBackgroundColor(modalListSelectBg). // NEW: Color
+		SetSelectedTextColor(modalListSelectText)      // NEW: Color
 
 	// Right Pane: Details Display
 	detailsView := tview.NewTextView().
 		SetDynamicColors(true).
 		SetScrollable(true).
 		SetWrap(true).
-		SetWordWrap(true)
+		SetWordWrap(true).
+		SetTextColor(modalPrimaryColor)
+
 	detailsView.SetBorder(true).
-		SetTitle("Word Details (Tab/Shift-Tab to scroll)")
-	// NEW: Set the initial help text for this modal.
+		SetTitle("Word Details (Tab/Shift-Tab to scroll)").
+		SetBorderColor(modalAccentColor). // NEW: Color
+		SetTitleColor(modalAccentColor)   // NEW: Color
+
+	// Set the initial help text for this modal.
 	detailsView.SetText(reverseFindHelpText)
+
+	detailsView.SetBackgroundColor(modalDetailsBg)
 
 	// --- Main Content Layout (The two panes) ---
 	contentFlex := tview.NewFlex().
@@ -538,16 +569,17 @@ func showMeaningSearchModal(pages *tview.Pages, glosses map[string][]Gloss, app 
 			0, 1, true,
 		).
 		AddItem(detailsView, 0, 2, false)
+	contentFlex.SetBackgroundColor(modalBgColor) // NEW: Set overall background
 
 	// --- Header ---
 	headerLeft := tview.NewTextView().
 		SetText(fmt.Sprintf("tsk (%s) - Reverse-Find by English Meaning", version)).
 		SetTextAlign(tview.AlignLeft).
-		SetTextColor(tcell.ColorBlack)
-	headerLeft.SetBackgroundColor(tcell.ColorLightGray)
+		SetTextColor(modalPrimaryColor) // NEW: Color
+	headerLeft.SetBackgroundColor(modalHeaderFooterBg)
 
 	headerRight := tview.NewButton("[::u]https://github.com/hiAndrewQuinn/tsk[::-]")
-	headerRight.SetLabelColor(tcell.ColorWhite)
+	headerRight.SetLabelColor(modalPrimaryColor) // NEW: Color
 	headerRight.SetSelectedFunc(func() {
 		if err := openBrowser("https://github.com/hiAndrewQuinn/tsk"); err != nil {
 			fmt.Fprintf(os.Stderr, "Error opening browser: %v\n", err)
@@ -555,7 +587,7 @@ func showMeaningSearchModal(pages *tview.Pages, glosses map[string][]Gloss, app 
 	})
 
 	headerFlex := tview.NewFlex().SetDirection(tview.FlexColumn)
-	headerFlex.SetBackgroundColor(tcell.ColorLightGray)
+	headerFlex.SetBackgroundColor(modalHeaderFooterBg) // NEW: Color
 	headerFlex.
 		AddItem(headerLeft, 0, 1, false).
 		AddItem(headerRight, 40, 0, false)
@@ -564,11 +596,11 @@ func showMeaningSearchModal(pages *tview.Pages, glosses map[string][]Gloss, app 
 	footerLeft := tview.NewTextView().
 		SetText("Esc to close. Enter to search. Up/Down to scroll results.").
 		SetTextAlign(tview.AlignLeft).
-		SetTextColor(tcell.ColorBlack)
-	footerLeft.SetBackgroundColor(tcell.ColorLightGray)
+		SetTextColor(modalPrimaryColor) // NEW: Color
+	footerLeft.SetBackgroundColor(modalHeaderFooterBg)
 
 	footerRight := tview.NewButton("[::u]https://andrew-quinn.me/[::-]")
-	footerRight.SetLabelColor(tcell.ColorWhite)
+	footerRight.SetLabelColor(modalPrimaryColor) // NEW: Color
 	footerRight.SetSelectedFunc(func() {
 		if err := openBrowser("https://andrew-quinn.me/"); err != nil {
 			fmt.Fprintf(os.Stderr, "Error opening browser: %v\n", err)
@@ -576,7 +608,7 @@ func showMeaningSearchModal(pages *tview.Pages, glosses map[string][]Gloss, app 
 	})
 
 	footerFlex := tview.NewFlex().SetDirection(tview.FlexColumn)
-	footerFlex.SetBackgroundColor(tcell.ColorLightGray)
+	footerFlex.SetBackgroundColor(modalHeaderFooterBg) // NEW: Color
 	footerFlex.
 		AddItem(footerLeft, 0, 1, false).
 		AddItem(footerRight, 40, 0, false)
@@ -589,6 +621,7 @@ func showMeaningSearchModal(pages *tview.Pages, glosses map[string][]Gloss, app 
 		AddItem(contentFlex, 0, 1, true).
 		AddItem(nil, 1, 0, false). // Spacer
 		AddItem(footerFlex, 1, 0, false)
+	modalLayout.SetBackgroundColor(modalBgColor) // NEW: Set overall background
 
 	// --- Logic & Event Handlers ---
 
