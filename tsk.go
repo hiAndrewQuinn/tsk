@@ -499,6 +499,9 @@ func showMeaningSearchModal(pages *tview.Pages, glosses map[string][]Gloss, app 
 
 	[green]Enter on a result[gray] in the list to select it and return to the main view.
 	[red]Enter on an empty search bar[gray] to close this window and return to the main view.
+	
+	Unlike the normal Finnish lookup, this mode does *not* search as you type.
+	You aren't supposed to stay here for long...
 
 	[white]
 	`
