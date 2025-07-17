@@ -895,19 +895,21 @@ func main() {
 	}
 
 	// Load glosses.
-	fmt.Println("Loading word definitions from", GLOSSES_FILE)
+	start = time.Now() // Re-use the 'start' variable
 	glosses, err := loadGlosses()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error loading glosses:", err)
 		os.Exit(1)
 	}
+	fmt.Printf("Loaded word glosses from %s in %v\n", GLOSSES_FILE, time.Since(start))
 
 	// Initialize deeper lookup prefixes.
-	fmt.Println("Initializing deeper lookup prefixes from go-deeper.txt")
+	start = time.Now() // Re-use the 'start' variable again
 	if err := initDeeperPrefixes(); err != nil {
 		fmt.Fprintln(os.Stderr, "Error initializing deeper prefixes:", err)
 		os.Exit(1)
 	}
+	fmt.Printf("Initialized deeper lookup prefixes from go-deeper.txt in %v\n", time.Since(start))
 
 	// dump embeddedDB bytes into a temporary file for SQL lookups
 	tmp, err := ioutil.TempFile("", "tsksentences-*.sqlite")
