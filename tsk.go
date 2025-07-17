@@ -2,8 +2,10 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"database/sql"
 	"encoding/csv"
+	"encoding/gob"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -100,8 +102,8 @@ var debug bool
 //go:embed words.txt
 var wordsTxt string
 
-//go:embed glosses.jsonl
-var glossesJsonl string
+//go:embed glosses.gob
+var glossesGob []byte
 
 //go:embed go-deeper.txt
 var goDeeperTxt string
@@ -134,7 +136,7 @@ const (
 
 	// Informational only.
 	WORD_LIST_FILE = "words.txt"
-	GLOSSES_FILE   = "glosses.jsonl"
+	GLOSSES_FILE   = "glosses.gob"
 
 	scrollDebounce = 5000 * time.Millisecond // Only allow one scroll event in this timeframe
 )
@@ -286,16 +288,21 @@ type Gloss struct {
 }
 
 func loadGlosses() (map[string][]Gloss, error) {
-	scanner := bufio.NewScanner(strings.NewReader(glossesJsonl))
-	glosses := make(map[string][]Gloss)
-	for scanner.Scan() {
-		var g Gloss
-		if err := json.Unmarshal(scanner.Bytes(), &g); err != nil {
-			return nil, err
-		}
-		glosses[g.Word] = append(glosses[g.Word], g)
+	// Create a reader from the embedded byte slice.
+	reader := bytes.NewReader(glossesGob)
+
+	// Create a new decoder.
+	decoder := gob.NewDecoder(reader)
+
+	// Declare the map to decode into.
+	var glosses map[string][]Gloss
+
+	// Decode the gob data into the map.
+	if err := decoder.Decode(&glosses); err != nil {
+		return nil, err
 	}
-	return glosses, scanner.Err()
+
+	return glosses, nil
 }
 
 // getDeeperGlosses is a recursive helper that looks for linkable phrases in a meaning string,
