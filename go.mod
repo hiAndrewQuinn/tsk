@@ -5,6 +5,7 @@ go 1.24.0
 require (
 	github.com/gdamore/tcell/v2 v2.8.1
 	github.com/rivo/tview v0.0.0-20241227133733-17b7edb88c57
+	modernc.org/sqlite v1.37.0
 )
 
 require (
@@ -26,5 +27,4 @@ require (
 	modernc.org/libc v1.62.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.9.1 // indirect
-	modernc.org/sqlite v1.37.0 // indirect
 )

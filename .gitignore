@@ -39,3 +39,4 @@ tsk-marked*
 # Do NOT commit SQLite libraries. Which we use!
 *.sqlite
 *.db
+*.gob
