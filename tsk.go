@@ -57,6 +57,8 @@ const helpText = `[gray]
 
 	             Provide as many details as you can. Response is on a best-effort basis.
 
+	[green]Search zzz[gray] to see what is [green]coming soon[gray] in new versions of tsk!
+
 	[white]
 	`
 
