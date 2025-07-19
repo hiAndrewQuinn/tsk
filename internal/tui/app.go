@@ -454,9 +454,19 @@ func (a *App) createGenericSearchLayout(
 
 	searchInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
+		case tcell.KeyUp:
+			currentItem := resultsList.GetCurrentItem()
+			if currentItem > 0 {
+				resultsList.SetCurrentItem(currentItem - 1)
+			}
+			return nil // Absorb the event, keeping focus on the input field
 		case tcell.KeyDown:
-			a.app.SetFocus(resultsList)
-			return nil
+			currentItem := resultsList.GetCurrentItem()
+			itemCount := resultsList.GetItemCount()
+			if itemCount > 0 && currentItem < itemCount-1 {
+				resultsList.SetCurrentItem(currentItem + 1)
+			}
+			return nil // Absorb the event, keeping focus on the input field
 		case tcell.KeyEnter:
 			if !config.InstantSearch {
 				searchAction(searchInput.GetText())
