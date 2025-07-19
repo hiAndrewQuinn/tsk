@@ -89,11 +89,15 @@ type App struct {
 	pageMap map[string]Page
 
 	// Components by page
-	mainInput       *tview.InputField
-	mainWordList    *tview.List
-	mainDetailsView *tview.TextView
-	inflectionList  *tview.List
-	meaningList     *tview.List
+	mainInput             *tview.InputField
+	mainWordList          *tview.List
+	mainDetailsView       *tview.TextView
+	inflectionList        *tview.List
+	meaningList           *tview.List
+	inflectionInput       *tview.InputField
+	inflectionDetailsView *tview.TextView
+	meaningInput          *tview.InputField
+	meaningDetailsView    *tview.TextView
 
 	// Data and state
 	version       string
@@ -105,6 +109,7 @@ type App struct {
 	inflectionsDB *sql.DB
 	markedWords   map[string]struct{}
 }
+
 
 // ModalTheme defines the complete color scheme for a search page.
 type ModalTheme struct {
@@ -252,13 +257,17 @@ func (a *App) createInflectionSearchPage() Page {
 		},
 	}
 
-	pageContent, searchInput, list := a.createGenericSearchLayout(config)
+	pageContent, searchInput, list, detailsView := a.createGenericSearchLayout(config)
 	a.inflectionList = list // Store reference to the list
+	a.inflectionInput = searchInput
+	a.inflectionDetailsView = detailsView
 
 	return Page{
 		Root:        a.createPageFrame(pageContent),
 		FocusTarget: searchInput,
 	}
+
+
 }
 
 // createMeaningSearchPage builds the UI for reverse-searching by English meaning.
@@ -295,13 +304,17 @@ func (a *App) createMeaningSearchPage() Page {
 		},
 	}
 
-	pageContent, searchInput, list := a.createGenericSearchLayout(config)
+	pageContent, searchInput, list, detailsView := a.createGenericSearchLayout(config)
 	a.meaningList = list // Store reference to the list
+	a.meaningInput = searchInput
+	a.meaningDetailsView = detailsView
 
 	return Page{
 		Root:        a.createPageFrame(pageContent),
 		FocusTarget: searchInput,
 	}
+
+
 }
 
 // createHelpPage builds the static help screen.
@@ -383,8 +396,7 @@ func (a *App) createFooter() *tview.Flex {
 // createGenericSearchLayout builds a themed search UI based on the provided configuration.
 func (a *App) createGenericSearchLayout(
 	config GenericSearchConfig,
-) (tview.Primitive, *tview.InputField, *tview.List) {
-
+) (tview.Primitive, *tview.InputField, *tview.List, *tview.TextView) {
 	// --- Components ---
 	searchInput := tview.NewInputField().
 		SetLabel(config.SearchLabel).
@@ -477,7 +489,7 @@ func (a *App) createGenericSearchLayout(
 		return event
 	})
 
-	return contentFlex, searchInput, resultsList
+	return contentFlex, searchInput, resultsList, detailsView
 }
 
 // --- Event Handlers & Actions ---
@@ -617,6 +629,30 @@ func (a *App) handleActionWithContext(action func()) {
 // switchPage changes the visible page and sets focus to the correct element.
 func (a *App) switchPage(name string) {
 	if page, ok := a.pageMap[name]; ok {
+		// When switching to a modal search page, clear its previous state first.
+		switch name {
+		case "inflections":
+			if a.inflectionInput != nil {
+				a.inflectionInput.SetText("")
+			}
+			if a.inflectionList != nil {
+				a.inflectionList.Clear()
+			}
+			if a.inflectionDetailsView != nil {
+				a.inflectionDetailsView.Clear()
+			}
+		case "meanings":
+			if a.meaningInput != nil {
+				a.meaningInput.SetText("")
+			}
+			if a.meaningList != nil {
+				a.meaningList.Clear()
+			}
+			if a.meaningDetailsView != nil {
+				a.meaningDetailsView.Clear()
+			}
+		}
+
 		a.pages.SwitchToPage(name)
 		if page.FocusTarget != nil {
 			a.app.SetFocus(page.FocusTarget)
