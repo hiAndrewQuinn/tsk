@@ -14,6 +14,7 @@ import (
 	_ "modernc.org/sqlite" // pure-Go SQLite driver with FTS5 support
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"sort"
@@ -45,6 +46,7 @@ const helpText = `[gray]
 	Tab        = Scroll Word Details forward
 	Shift-Tab  = Scroll Word Details backward
 
+	[blue]Control-E[gray]  = [blue]Etsi perusmuotin, aka lemmatizer[gray]. Find a word's base form from its inflected form.
 	[teal]Control-T[gray]  = Show [teal]example sentences[gray], from Tatoeba for the selected word.
 	[yellow]Control-S[gray]  = [yellow]Mark[gray]/unmark words. All marked words will be saved upon Esc to a text file.
 	[green]Control-L[gray]  = [green]List[gray] marked words. 
@@ -114,6 +116,9 @@ var goDeeperTxt string
 var embeddedDB []byte
 var exampleDB *sql.DB
 
+// --- NEW --- Global DB handle for the external inflections database.
+var inflectionsDB *sql.DB
+
 // Schema for the embeddedDB, at least as of 2025-05-07 :
 //
 // CREATE VIRTUAL TABLE sentences USING fts5(
@@ -137,8 +142,9 @@ const (
 	TRIE_MAX_SEARCH_DEPTH = 50 // Maximum number of words to return
 
 	// Informational only.
-	WORD_LIST_FILE = "words.txt"
-	GLOSSES_FILE   = "glosses.gob"
+	WORD_LIST_FILE   = "words.txt"
+	GLOSSES_FILE     = "glosses.gob"
+	INFLECTIONS_FILE = "inflections.db"
 
 	scrollDebounce = 5000 * time.Millisecond // Only allow one scroll event in this timeframe
 )
@@ -497,6 +503,219 @@ func cleanTerm(s string) string {
 	return s[start:end]
 }
 
+// ----------------------------------------------------
+// --- NEW --- Inflection Search Modal (Ctrl-I)
+// ----------------------------------------------------
+func showInflectionSearchModal(pages *tview.Pages, glosses map[string][]Gloss, app *tview.Application, mainInputField *tview.InputField, db *sql.DB) {
+	const modalPageName = "inflectionSearch"
+	if debug {
+		log.Println("showInflectionSearchModal: Function called.")
+	}
+
+	const inflectionHelpText = `[gray]
+	Keybindings:
+
+	Up/Down     = Scroll result list.
+
+	[green]Enter on a result[gray] in the list to select its base form and return to the main view.
+	[red]Esc[gray] or [red]Enter on an empty search bar[gray] to close this window.
+	
+	This feature searches for a word's base form in real-time.
+	A minimum of 3 characters is required to begin a search.
+
+	[white]
+	`
+
+	const (
+		modalBgColor        = tcell.ColorSteelBlue
+		modalHeaderFooterBg = tcell.ColorDarkSlateGray
+		modalDetailsBg      = tcell.ColorMidnightBlue
+		modalPrimaryColor   = tcell.ColorLightCyan
+		modalAccentColor    = tcell.ColorAqua
+		modalFieldBgColor   = tcell.ColorDarkBlue
+		modalListSelectBg   = tcell.ColorDarkSlateGray
+		modalListSelectText = tcell.ColorAqua
+	)
+
+	// --- Components ---
+	searchInput := tview.NewInputField().
+		SetLabel("Inflected form: ").
+		SetLabelColor(modalAccentColor).
+		SetFieldBackgroundColor(modalFieldBgColor).
+		SetFieldTextColor(modalPrimaryColor).
+		SetFieldWidth(30)
+
+	resultsList := tview.NewList().
+		ShowSecondaryText(false).
+		SetSelectedBackgroundColor(modalListSelectBg).
+		SetSelectedTextColor(modalListSelectText)
+
+	detailsView := tview.NewTextView().
+		SetDynamicColors(true).
+		SetScrollable(true).
+		SetWrap(true).
+		SetWordWrap(true).
+		SetTextColor(modalPrimaryColor).
+		SetText("[blue]Type 3 characters or more to start searching.[white]") // Initial message
+
+	detailsView.SetBorder(true).
+		SetTitle("Base Form Details (Tab/Shift-Tab to scroll)").
+		SetBorderColor(modalAccentColor).
+		SetTitleColor(modalAccentColor)
+	detailsView.SetBackgroundColor(modalDetailsBg)
+
+	// --- Main Layout ---
+	contentFlex := tview.NewFlex().
+		SetDirection(tview.FlexColumn).
+		AddItem(
+			tview.NewFlex().SetDirection(tview.FlexRow).
+				AddItem(searchInput, 3, 1, true).
+				AddItem(resultsList, 0, 4, false),
+			0, 1, true,
+		).
+		AddItem(detailsView, 0, 2, false)
+	contentFlex.SetBackgroundColor(modalBgColor)
+
+	// --- Header & Footer ---
+	header := tview.NewTextView().
+		SetText(fmt.Sprintf("tsk (%s) - Inflection Search", version)).
+		SetTextAlign(tview.AlignCenter).
+		SetTextColor(modalPrimaryColor).
+		SetBackgroundColor(modalHeaderFooterBg)
+
+	footer := tview.NewTextView().
+		SetText("Esc to close. Enter on result to select.").
+		SetTextAlign(tview.AlignCenter).
+		SetTextColor(modalPrimaryColor).
+		SetBackgroundColor(modalHeaderFooterBg)
+
+	// --- Final Modal Layout ---
+	modalLayout := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(header, 1, 0, false).
+		AddItem(nil, 1, 0, false).
+		AddItem(contentFlex, 0, 1, true).
+		AddItem(nil, 1, 0, false).
+		AddItem(footer, 1, 0, false)
+	modalLayout.SetBackgroundColor(modalBgColor)
+
+	// --- Event Handlers ---
+
+	// When selection in list changes, update the details view
+	resultsList.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
+		parts := strings.Split(mainText, " ~> ")
+		if len(parts) != 2 {
+			detailsView.SetText(fmt.Sprintf("[red]Error parsing result: %s[white]", mainText))
+			return
+		}
+		inflection, baseWord := parts[0], parts[1]
+
+		var builder strings.Builder
+		builder.WriteString(fmt.Sprintf("[aqua]%s[white] ~> [yellow]%s[white]\n\n", inflection, baseWord))
+		builder.WriteString(generateGlossText(baseWord, glosses))
+
+		detailsView.SetText(builder.String()).ScrollToBeginning()
+	})
+
+	// When a list item is selected with Enter, go back to main view
+	resultsList.SetSelectedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
+		parts := strings.Split(mainText, " ~> ")
+		if len(parts) == 2 {
+			baseWord := parts[1]
+			mainInputField.SetText(baseWord)
+		}
+		pages.RemovePage(modalPageName)
+		app.SetFocus(mainInputField)
+	})
+
+	// When input text changes, run a search
+	searchInput.SetChangedFunc(func(text string) {
+		query := strings.TrimSpace(text)
+		resultsList.Clear()
+		detailsView.Clear().ScrollToBeginning()
+
+		if len(query) < 3 {
+			detailsView.SetText("[blue]Type 3 characters or more to start searching.[white]")
+			return
+		}
+
+		// Prepare and run the FTS5 prefix query
+		ftsQuery := query + "*"
+		q := "SELECT inflection, word FROM inflections_fts WHERE inflection MATCH ? ORDER BY RANDOM() LIMIT 50"
+		rows, err := db.Query(q, ftsQuery)
+		if err != nil {
+			detailsView.SetText(fmt.Sprintf("[red]Database query failed: %v[white]", err))
+			return
+		}
+		defer rows.Close()
+
+		found := false
+		for rows.Next() {
+			found = true
+			var inflection, word string
+			if err := rows.Scan(&inflection, &word); err != nil {
+				continue // Skip malformed rows
+			}
+			displayString := fmt.Sprintf("%s ~> %s", inflection, word)
+			resultsList.AddItem(displayString, "", 0, nil)
+		}
+		resultsList.SetCurrentItem(0)
+
+		if !found {
+			detailsView.SetText(fmt.Sprintf("[red]No base form found for '[darkred:%s]'.[white]", query))
+		}
+	})
+
+	// Handle special keys in the input field
+	searchInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEsc:
+			pages.RemovePage(modalPageName)
+			return nil
+		case tcell.KeyEnter:
+			if searchInput.GetText() == "" {
+				pages.RemovePage(modalPageName)
+			} else {
+				// Transfer focus to list to allow selection
+				app.SetFocus(resultsList)
+			}
+			return nil
+		case tcell.KeyDown:
+			app.SetFocus(resultsList)
+			cur := resultsList.GetCurrentItem()
+			if cur < resultsList.GetItemCount()-1 {
+				resultsList.SetCurrentItem(cur + 1)
+			}
+			return nil
+		case tcell.KeyUp:
+			app.SetFocus(resultsList)
+			cur := resultsList.GetCurrentItem()
+			if cur > 0 {
+				resultsList.SetCurrentItem(cur - 1)
+			}
+			return nil
+		case tcell.KeyTab:
+			app.SetFocus(detailsView)
+			row, col := detailsView.GetScrollOffset()
+			detailsView.ScrollTo(row+1, col)
+			return nil
+		case tcell.KeyBacktab:
+			app.SetFocus(detailsView)
+			row, col := detailsView.GetScrollOffset()
+			newRow := row - 1
+			if newRow < 0 {
+				newRow = 0
+			}
+			detailsView.ScrollTo(newRow, col)
+			return nil
+		}
+		return event
+	})
+
+	pages.AddPage(modalPageName, modalLayout, true, true)
+	app.SetFocus(searchInput)
+}
+
 // showMeaningSearchModal creates and displays a modal window for searching word meanings.
 // This modal is designed to look and feel like the main application window, with a
 // two-pane layout for search/results and details.
@@ -769,15 +988,48 @@ func showMeaningSearchModal(pages *tview.Pages, glosses map[string][]Gloss, app 
 // ----------------------
 
 func main() {
+
 	fmt.Println(fmt.Sprintf("tsk (%s) - Andrew's Pocket Finnish Dictionary\n", version))
 	fmt.Println("Project @ https://github.com/hiAndrewQuinn/tsk")
 	fmt.Println("Author  @ https://andrew-quinn.me/\n")
 
-	flag.Usage = printCustomUsage
-
 	// Initialize global debug flag.
 	flag.BoolVar(&debug, "debug", false, "print debug info")
 	flag.Parse()
+
+	flag.Usage = printCustomUsage
+
+	// Attempt to load the optional inflections database.
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		// This is a rare error, but good to handle.
+		fmt.Fprintf(os.Stderr, "[WARNING] Could not determine user config directory: %v. Ctrl-I search is disabled.\n", err)
+	} else {
+		// Construct the full, platform-agnostic path to the database.
+		// It's good practice to put your app's data in a dedicated subdirectory.
+		inflectionsDBPath := filepath.Join(configDir, "tsk", INFLECTIONS_FILE)
+
+		// Check if the database file exists at the expected location.
+		if _, err := os.Stat(inflectionsDBPath); os.IsNotExist(err) {
+			fmt.Printf("Note: Inflections database not found at '%s'.\n", inflectionsDBPath)
+			fmt.Println("To enable inflected word search (Ctrl-I), place your 'inflections.db' file there.")
+		} else {
+			fmt.Printf("Attempting to load inflections database from %s...\n", inflectionsDBPath)
+
+			// Using a file DSN URI is safer for paths that might contain special characters.
+			dsn := fmt.Sprintf("file:%s?_journal_mode=WAL&immutable=1", filepath.ToSlash(inflectionsDBPath))
+
+			inflectionsDB, err = sql.Open("sqlite", dsn)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "[WARNING] Could not open inflections database: %v. Ctrl-I search is disabled.\n", err)
+			} else if err = inflectionsDB.Ping(); err != nil {
+				fmt.Fprintf(os.Stderr, "[WARNING] Could not connect to inflections database: %v. Ctrl-I search is disabled.\n", err)
+			} else {
+				fmt.Println("Inflections database loaded successfully. Ctrl-I is enabled.")
+				defer inflectionsDB.Close()
+			}
+		}
+	}
 
 	// If debug mode is enabled, open (or create) the debug log file in append mode.
 	if debug {
@@ -1137,6 +1389,17 @@ func main() {
 		case tcell.KeyCtrlF:
 			showMeaningSearchModal(pages, glosses, app, inputField)
 			return nil
+		case tcell.KeyCtrlE:
+			if inflectionsDB != nil {
+				showInflectionSearchModal(pages, glosses, app, inputField, inflectionsDB)
+			} else {
+				textView.SetTitle("Inflection Search Unavailable")
+				textView.SetBorderColor(tcell.ColorRed)
+				textView.SetTitleColor(tcell.ColorRed)
+				textView.SetText("\n[red]Inflection search is disabled. Do you have the inflections database installed?[white]")
+			}
+			return nil
+
 		case tcell.KeyCtrlT:
 			if list.GetItemCount() == 0 {
 				textView.SetBorderColor(tcell.ColorTeal)
