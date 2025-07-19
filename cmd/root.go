@@ -11,6 +11,7 @@ import (
 
 	"github.com/hiAndrewQuinn/tsk/internal/config"
 	"github.com/hiAndrewQuinn/tsk/internal/data"
+	"github.com/hiAndrewQuinn/tsk/internal/logger"
 	"github.com/hiAndrewQuinn/tsk/internal/trie"
 	"github.com/spf13/cobra"
 )
@@ -49,7 +50,7 @@ func setupLogging() error {
 	}
 
 	log.SetOutput(file)
-	log.Println("Debug mode enabled. Logging to debug.log.")
+	logger.Infof("Debug mode enabled. Logging to debug.log.")
 	return nil
 }
 

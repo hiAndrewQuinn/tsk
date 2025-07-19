@@ -10,7 +10,6 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -127,7 +126,8 @@ func NewPrefixMatcher() (*PrefixMatcher, error) {
 // phrases and returns the longest one that matches.
 func (pm *PrefixMatcher) findLongestPrefix(s string) (string, bool) {
 	// This handles the entry and exit logs automatically.
-	defer log.Printf("%s: Exiting.", logger.Enter())
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	logger.Tracef("Checking for prefixes which match '%s'", s)
 
 	// This check is a fast path to avoid unnecessary work.
@@ -188,14 +188,14 @@ func LoadInflectionsDB() (*sql.DB, error) {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		// Non-fatal error, as this DB is optional. Log it and continue.
-		log.Printf("[INFO] Could not determine user config directory: %v. Inflection search will be disabled.", err)
+		logger.Warnf("Could not determine user config directory: %v. Inflection search will be disabled.", err)
 		return nil, nil
 	}
 
 	dbPath := filepath.Join(configDir, "tsk", "inflections.db")
 
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		log.Printf("[INFO] Optional inflections database not found at '%s'. Inflection search will be disabled.", dbPath)
+		logger.Infof("Optional inflections database not found at '%s'. Inflection search will be disabled.", dbPath)
 		return nil, nil // No error, just no DB.
 	}
 
@@ -209,7 +209,7 @@ func LoadInflectionsDB() (*sql.DB, error) {
 		return nil, fmt.Errorf("could not connect to inflections database at %s: %w", dbPath, err)
 	}
 
-	log.Printf("[INFO] Inflections database loaded successfully from %s.", dbPath)
+	logger.Infof("Inflections database loaded successfully from %s.", dbPath)
 	return db, nil
 }
 
@@ -260,8 +260,8 @@ func getDeeperGlosses(text string, glosses map[string][]Gloss, matcher *PrefixMa
 			glossFormat = "[lightgray]  ~> %s (%s)[white]\n"
 			meaningFormat = "[lightgray]      - %s[white]\n"
 		} else { // level == 2
-			glossFormat = "[gray]        ~> %s (%s)[white]\n"
-			meaningFormat = "[gray]           - %s[white]\n"
+			glossFormat = "[gray]         ~> %s (%s)[white]\n"
+			meaningFormat = "[gray]             - %s[white]\n"
 		}
 
 		for _, tg := range targetGlosses {

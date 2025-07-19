@@ -7,7 +7,6 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"runtime"
@@ -20,55 +19,56 @@ import (
 	"github.com/rivo/tview"
 
 	"github.com/hiAndrewQuinn/tsk/internal/data"
+	"github.com/hiAndrewQuinn/tsk/internal/logger"
 	"github.com/hiAndrewQuinn/tsk/internal/trie"
 )
 
 // --- Constants ---
 
 const helpText = `[gray]
-	Keybindings:
-	Esc         = Exit the application
-	Up/Down     = Scroll lists
-	Tab/Shift-Tab = Scroll details view on main screen
+    Keybindings:
+    Esc          = Exit the application
+    Up/Down      = Scroll lists
+    Tab/Shift-Tab = Scroll details view on main screen
 
-	[blue]Ctrl-E[gray]      = Toggle [blue]Etsi perusmuoto (lemmatizer)[gray] search.
-	[teal]Ctrl-T[gray]      = Show [teal]example sentences[gray] for the selected word.
-	[yellow]Ctrl-S[gray]    = [yellow]Mark[gray]/unmark the selected word for export.
-	[green]Ctrl-L[gray]      = [green]List[gray] all marked words.
-	[cyan]Ctrl-F[gray]      = Toggle [cyan]Reverse-find[gray] by English definition.
-	[pink]Ctrl-H[gray]      = Toggle this [pink]help[gray] screen.
+    [blue]Ctrl-E[gray]      = Toggle [blue]Etsi perusmuoto (lemmatizer)[gray] search.
+    [teal]Ctrl-T[gray]      = Show [teal]example sentences[gray] for the selected word.
+    [yellow]Ctrl-S[gray]    = [yellow]Mark[gray]/unmark the selected word for export.
+    [green]Ctrl-L[gray]     = [green]List[gray] all marked words.
+    [cyan]Ctrl-F[gray]      = Toggle [cyan]Reverse-find[gray] by English definition.
+    [pink]Ctrl-H[gray]      = Toggle this [pink]help[gray] screen.
 
-	[red]Ctrl-R[gray]       = [red]Report a bug[gray] on GitHub.com. [red]Opens your web browser[gray].
-	[white]`
+    [red]Ctrl-R[gray]       = [red]Report a bug[gray] on GitHub.com. [red]Opens your web browser[gray].
+    [white]`
 
 const finnishFlag = `[gray]
-                      _,-(.;)
-                    _,-',###""
-                  _,-',###",'|
-                _,-',###" ,-" :|
-              _,-',###" _,#"   .'|
-            ### _,-',###"_,######   : |
-          _,-',###;-'"~. #####9   :' |
-        ,###"   |   :  ######  ,. _|
-        "       | :     #####( .;###|
-                |:'.     ######,6####|
-                |..       ;############|
-                ":_,###############|
-                      |##############'~ |
-                      |############".   |
-                      .###########':    |
-                      :##".   #####. '   |
-                      | :'    ######.   .|
-                      |.'     ######     |
-                      |.      ######   ':|
-                      ":      ######   .:.|
-                       |     ."#####    ._|
-                       |         :#####_,-'""
-                       |       '.,###""
-                       :'   .:,-'
-                       |_.,-'
-                       "
-	[white]`
+                             _,-(.;)
+                          _,-',###""
+                       _,-',###",'|
+                     _,-',###" ,-" :|
+                   _,-',###" _,#"   .'|
+                 ### _,-',###"_,######   : |
+               _,-',###;-'"~. #####9   :' |
+            ,###"   |   :  ######  ,. _|
+            "       | :     #####( .;###|
+                    |:'.     ######,6####|
+                    |..       ;############|
+                    ":_,###############|
+                           |##############'~ |
+                           |############".   |
+                           .###########':    |
+                           :##".   #####. '   |
+                           | :'    ######.   .|
+                           |.'     ######     |
+                           |.      ######   ':|
+                           ":      ######   .:.|
+                            |     ."#####    ._|
+                            |         :#####_,-'""
+                            |      '.,###""
+                            :'   .:,-'
+                            |_.,-'
+                            "
+    [white]`
 
 // --- Type Definitions ---
 
@@ -110,16 +110,15 @@ type App struct {
 	markedWords   map[string]struct{}
 }
 
-
 // ModalTheme defines the complete color scheme for a search page.
 type ModalTheme struct {
-	BgColor               tcell.Color
-	HeaderFooterBg        tcell.Color
-	DetailsBg             tcell.Color
-	PrimaryTextColor      tcell.Color
-	AccentColor           tcell.Color
-	FieldBgColor          tcell.Color
-	ListSelectedBgColor   tcell.Color
+	BgColor             tcell.Color
+	HeaderFooterBg      tcell.Color
+	DetailsBg           tcell.Color
+	PrimaryTextColor    tcell.Color
+	AccentColor         tcell.Color
+	FieldBgColor        tcell.Color
+	ListSelectedBgColor tcell.Color
 	ListSelectedTextColor tcell.Color
 }
 
@@ -219,13 +218,13 @@ func (a *App) createMainSearchPage() Page {
 // createInflectionSearchPage builds the UI for searching by inflected form.
 func (a *App) createInflectionSearchPage() Page {
 	theme := ModalTheme{
-		BgColor:               tcell.ColorSteelBlue,
-		HeaderFooterBg:        tcell.ColorDarkSlateGray,
-		DetailsBg:             tcell.ColorMidnightBlue,
-		PrimaryTextColor:      tcell.ColorLightCyan,
-		AccentColor:           tcell.ColorAqua,
-		FieldBgColor:          tcell.ColorDarkBlue,
-		ListSelectedBgColor:   tcell.ColorDarkSlateGray,
+		BgColor:             tcell.ColorSteelBlue,
+		HeaderFooterBg:      tcell.ColorDarkSlateGray,
+		DetailsBg:           tcell.ColorMidnightBlue,
+		PrimaryTextColor:    tcell.ColorLightCyan,
+		AccentColor:         tcell.ColorAqua,
+		FieldBgColor:        tcell.ColorDarkBlue,
+		ListSelectedBgColor: tcell.ColorDarkSlateGray,
 		ListSelectedTextColor: tcell.ColorAqua,
 	}
 
@@ -267,19 +266,18 @@ func (a *App) createInflectionSearchPage() Page {
 		FocusTarget: searchInput,
 	}
 
-
 }
 
 // createMeaningSearchPage builds the UI for reverse-searching by English meaning.
 func (a *App) createMeaningSearchPage() Page {
 	theme := ModalTheme{
-		BgColor:               tcell.GetColor("#002b36"), // Solarized Dark Base
-		HeaderFooterBg:        tcell.GetColor("#073642"), // Solarized Dark Base02
-		DetailsBg:             tcell.GetColor("#00222b"), // Darker variant for details
-		PrimaryTextColor:      tcell.GetColor("#839496"), // Solarized Text
-		AccentColor:           tcell.ColorTeal,
-		FieldBgColor:          tcell.GetColor("#073642"), // Solarized Dark Base02
-		ListSelectedBgColor:   tcell.ColorTeal,
+		BgColor:             tcell.GetColor("#002b36"), // Solarized Dark Base
+		HeaderFooterBg:      tcell.GetColor("#073642"), // Solarized Dark Base02
+		DetailsBg:           tcell.GetColor("#00222b"), // Darker variant for details
+		PrimaryTextColor:    tcell.GetColor("#839496"), // Solarized Text
+		AccentColor:         tcell.ColorTeal,
+		FieldBgColor:        tcell.GetColor("#073642"), // Solarized Dark Base02
+		ListSelectedBgColor: tcell.ColorTeal,
 		ListSelectedTextColor: tcell.ColorWhite,
 	}
 
@@ -313,7 +311,6 @@ func (a *App) createMeaningSearchPage() Page {
 		Root:        a.createPageFrame(pageContent),
 		FocusTarget: searchInput,
 	}
-
 
 }
 
@@ -676,9 +673,7 @@ func (a *App) updateWordList(text string) {
 
 // displayGloss shows the definition for the given word in the main details view.
 func (a *App) displayGloss(word string) {
-	if a.debug {
-		log.Printf("displayGloss: called for word: %s", word)
-	}
+	logger.Tracef("called for word: %s", word)
 
 	_, isMarked := a.markedWords[word]
 	if isMarked {
@@ -709,14 +704,10 @@ func (a *App) toggleMarkedWord() {
 
 	if _, present := a.markedWords[word]; present {
 		delete(a.markedWords, word)
-		if a.debug {
-			log.Printf("Unmarking %s.", word)
-		}
+		logger.Tracef("Unmarking %s.", word)
 	} else {
 		a.markedWords[word] = struct{}{}
-		if a.debug {
-			log.Printf("Marking %s.", word)
-		}
+		logger.Tracef("Marking %s.", word)
 	}
 	a.displayGloss(word) // Re-display to update title and border color
 }
@@ -880,7 +871,7 @@ func (a *App) saveMarkedWords() error {
 			for _, gloss := range glossSlice {
 				line, err := json.Marshal(gloss)
 				if err != nil {
-					log.Printf("Error marshaling gloss for %s: %v\n", wform, err)
+					logger.Warnf("Error marshaling gloss for %s: %v", wform, err)
 					continue
 				}
 				if _, err := fj.Write(append(line, '\n')); err != nil {
@@ -939,4 +930,3 @@ func cleanTerm(s string) string {
 	}
 	return s[start:end]
 }
-

@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"time"
 )
@@ -50,7 +51,11 @@ func printCustomUsage() {
 // ----------------------
 
 func main() {
-	fmt.Printf("makegob (%s) - Gloss Converter\n\n", version)
+	// Configure logger for clean output
+	log.SetFlags(0)
+	log.SetPrefix("makegob: ")
+
+	log.Printf("makegob (%s) - Gloss Converter\n", version)
 
 	// --- Flag setup ---
 	inputFile := flag.String("in", "", "Input JSONL file. (default: glosses.jsonl or stdin)")
@@ -67,8 +72,7 @@ func main() {
 		// User explicitly provided an input file.
 		file, err := os.Open(*inputFile)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error opening specified input file '%s': %v\n", *inputFile, err)
-			os.Exit(1)
+			log.Fatalf("Error opening specified input file '%s': %v", *inputFile, err)
 		}
 		defer file.Close()
 		reader = file
@@ -83,9 +87,8 @@ func main() {
 			// Fall back to the default filename.
 			file, err := os.Open(defaultInputFile)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error opening default input file '%s': %v\n", defaultInputFile, err)
-				fmt.Fprintln(os.Stderr, "You can specify a file with -in or pipe data to the program.")
-				os.Exit(1)
+				log.Printf("Error opening default input file '%s': %v", defaultInputFile, err)
+				log.Fatalf("You can specify a file with -in or pipe data to the program.")
 			}
 			defer file.Close()
 			reader = file
@@ -94,28 +97,26 @@ func main() {
 	}
 
 	// --- Processing ---
-	fmt.Printf("Reading glosses from %s...\n", inputSourceName)
+	log.Printf("Reading glosses from %s...", inputSourceName)
 	start := time.Now()
 
 	// Load and parse the JSONL data.
 	glosses, err := loadGlossesFromJSONL(reader)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error reading or parsing glosses:", err)
-		os.Exit(1)
+		log.Fatalf("Error reading or parsing glosses: %v", err)
 	}
 	loadDuration := time.Since(start)
-	fmt.Printf(" -> Loaded and parsed %d unique word entries in %v.\n", len(glosses), loadDuration)
+	log.Printf(" -> Loaded and parsed %d unique word entries in %v.", len(glosses), loadDuration)
 
 	// Save the data to a Gob file.
-	fmt.Printf("Writing data to %s...\n", *outputFile)
+	log.Printf("Writing data to %s...", *outputFile)
 	start = time.Now()
 	if err := saveGlossesToGob(glosses, *outputFile); err != nil {
-		fmt.Fprintln(os.Stderr, "Error writing to Gob file:", err)
-		os.Exit(1)
+		log.Fatalf("Error writing to Gob file: %v", err)
 	}
 	saveDuration := time.Since(start)
-	fmt.Printf(" -> Successfully wrote gloss data in %v.\n\n", saveDuration)
-	fmt.Println("Conversion complete.")
+	log.Printf(" -> Successfully wrote gloss data in %v.", saveDuration)
+	log.Println("Conversion complete.")
 }
 
 // loadGlossesFromJSONL reads from an io.Reader, parses each JSON line,
