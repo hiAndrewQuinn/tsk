@@ -3,7 +3,7 @@
 # --- Project Settings ---
 BINARY_NAME := tsk
 # The main package is in the project root.
-MAIN_PKG := . # <<< FIX: Changed from './cmd/tsk' to '.'
+MAIN_PKG := .
 # Extract version from cmd/root.go where Cobra typically stores it
 VERSION ?= $(shell grep -m1 'Version\s*=' cmd/root.go | cut -d'"' -f2)
 VERSION_TAG := $(shell echo $(VERSION) | sed 's/\./-/g')
@@ -24,7 +24,7 @@ DB_FILE := $(ASSET_DIR)/example-sentences.sqlite
 
 # --- Tools ---
 MAKEGLOSS_CMD := go run ./cmd/makegloss
-DB_BUILDER_SCRIPT := ./build-example-sentences-db.sh
+DB_BUILDER_CMD := go run ./cmd/builddb
 # Define platforms for cross-compilation
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/386
 
@@ -67,14 +67,10 @@ $(WORDS_FILE): $(JSONL_SRC)
 	@echo "-> Generating $(WORDS_FILE)..."
 	@jq -r '.word' $(JSONL_SRC) | sort -u > $(WORDS_FILE)
 
-# Rule to build the SQLite DB and place it in the assets directory
-# Note: This assumes your build script can be pointed to an output file.
-# If build-example-sentences-db.sh has a hardcoded path, you may need to edit it.
-$(DB_FILE): $(TSV_SRC) $(DB_BUILDER_SCRIPT)
+# Rule to build the SQLite DB using the 'builddb' Go program
+$(DB_FILE): $(TSV_SRC) cmd/builddb/main.go
 	@echo "-> Generating $(DB_FILE)..."
-	@# We move the generated file to the correct assets directory.
-	@./$(DB_BUILDER_SCRIPT)
-	@mv $(shell basename $(DB_FILE)) $(DB_FILE)
+	@$(DB_BUILDER_CMD) -in $(TSV_SRC) -out $(DB_FILE)
 
 # --- Utility Rules ---
 
