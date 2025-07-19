@@ -14,8 +14,8 @@ ASSET_DIR := internal/data/assets
 INSTALL_DIR ?= /usr/local/bin
 
 # Source files for asset generation
-JSONL_SRC := glosses.jsonl
-TSV_SRC := example-sentences.tsv
+JSONL_SRC := data/glosses.jsonl
+TSV_SRC := data/example-sentences.tsv
 
 # Generated asset files (target)
 GOB_FILE := $(ASSET_DIR)/glosses.gob
