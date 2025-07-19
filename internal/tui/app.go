@@ -130,6 +130,7 @@ type GenericSearchConfig struct {
 	FooterText       string
 	Theme            ModalTheme
 	InstantSearch    bool
+	CopyOnEnter      bool
 	MinSearchChars   int
 	OnSearch         func(query string, results *tview.List, details *tview.TextView)
 	OnResultChanged  func(mainText string, details *tview.TextView)
@@ -184,7 +185,6 @@ func (a *App) createPages() {
 	a.pageMap["main"] = a.createMainSearchPage()
 	a.pageMap["inflections"] = a.createInflectionSearchPage()
 	a.pageMap["meanings"] = a.createMeaningSearchPage()
-	a.pageMap["help"] = a.createHelpPage()
 
 	for name, page := range a.pageMap {
 		a.pages.AddPage(name, page.Root, true, name == "main")
@@ -195,31 +195,60 @@ func (a *App) createPages() {
 func (a *App) createMainSearchPage() Page {
 	defer logger.Tracef("Exiting.")
 	logger.Enter()
-	// --- Components ---
-	a.mainInput = tview.NewInputField().SetLabel("Search: ").SetFieldWidth(30)
-	a.mainWordList = tview.NewList().ShowSecondaryText(false)
-	a.mainDetailsView = tview.NewTextView().
-		SetDynamicColors(true).
-		SetWrap(true).
-		SetWordWrap(true)
-	a.mainDetailsView.SetBorder(true)
-	a.mainDetailsView.SetText(helpText) // Show help on startup
 
-	// --- Layout ---
-	leftFlex := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(a.mainInput, 3, 1, true).
-		AddItem(a.mainWordList, 0, 4, false)
+	theme := ModalTheme{
+		// Define a theme for your main page. You can customize these colors.
+		// For example, using a subtle variant of the existing themes or a new one.
+		BgColor:             tcell.ColorBlack,
+		HeaderFooterBg:      tcell.ColorDarkSlateGray,
+		DetailsBg:           tcell.ColorDarkBlue,
+		PrimaryTextColor:    tcell.ColorWhite,
+		AccentColor:         tcell.ColorAqua,
+		FieldBgColor:        tcell.ColorDarkSlateGray,
+		ListSelectedBgColor: tcell.ColorTeal,
+		ListSelectedTextColor: tcell.ColorWhite,
+	}
 
-	topFlex := tview.NewFlex().SetDirection(tview.FlexColumn).
-		AddItem(leftFlex, 0, 1, true).
-		AddItem(a.mainDetailsView, 0, 2, false)
+	config := GenericSearchConfig{
+		Title:          fmt.Sprintf("tsk (%s) - Main Search", a.version), // Assuming 'tsk' is your app name
+		SearchLabel:    "Search: ",
+		DetailsTitle:   "Details",
+		FooterText:     "Ctrl-Q to quit. Ctrl-I for inflection. Ctrl-M for meaning.",
+		Theme:          theme,
+		InstantSearch:  true, // Or false, depending on desired behavior
+		CopyOnEnter:    false, // Or true, depending on desired behavior
+		MinSearchChars: 1,    // Or 0, if you want to allow empty searches
+		OnSearch: func(query string, results *tview.List, details *tview.TextView) {
+			defer logger.Tracef("Exiting.")
+			logger.Enter()
+			a.updateWordList(query) // Assuming this is the core search action
+		},
+		OnResultChanged: func(mainText string, details *tview.TextView) {
+			defer logger.Tracef("Exiting.")
+			logger.Enter()
+			details.SetText(data.GenerateGlossText(mainText, a.glosses, a.prefixMatcher)).ScrollToBeginning()
+		},
+		OnResultSelected: func(mainText string) {
+			defer logger.Tracef("Exiting.")
+			logger.Enter()
+			a.mainInput.SetText(mainText) // Keep the selected word in the input
+		},
+	}
 
-	// --- Handlers ---
+	pageContent, searchInput, list, detailsView := a.createGenericSearchLayout(config)
+
+	a.mainInput = searchInput
+	a.mainWordList = list
+	a.mainDetailsView = detailsView
+
+	a.mainDetailsView.SetText(helpText)
+
+
 	a.setupMainPageWidgetHandlers()
 
 	return Page{
-		Root:        a.createPageFrame(topFlex),
-		FocusTarget: a.mainInput,
+		Root:        a.createPageFrame(pageContent),
+		FocusTarget: searchInput, // Now consistently uses searchInput
 	}
 }
 
@@ -245,6 +274,7 @@ func (a *App) createInflectionSearchPage() Page {
 		FooterText:     "Esc to exit. Ctrl-E to return. Enter on result to select.",
 		Theme:          theme,
 		InstantSearch:  true,
+		CopyOnEnter:    true,
 		MinSearchChars: 3,
 		OnSearch: func(query string, results *tview.List, details *tview.TextView) {
 			defer logger.Tracef("Exiting.")
@@ -306,6 +336,7 @@ func (a *App) createMeaningSearchPage() Page {
 		FooterText:     "Esc to exit. Ctrl-F to return. Press Enter to search, then Enter on result to select.",
 		Theme:          theme,
 		InstantSearch:  false,
+		CopyOnEnter:    true,
 		MinSearchChars: 1,
 		OnSearch: func(query string, results *tview.List, details *tview.TextView) {
 			defer logger.Tracef("Exiting.")
@@ -336,22 +367,6 @@ func (a *App) createMeaningSearchPage() Page {
 		FocusTarget: searchInput,
 	}
 
-}
-
-// createHelpPage builds the static help screen.
-func (a *App) createHelpPage() Page {
-	defer logger.Tracef("Exiting.")
-	logger.Enter()
-	textView := tview.NewTextView().
-		SetDynamicColors(true).
-		SetText(helpText).
-		SetScrollable(true)
-	textView.SetBorder(true).SetTitle("Help (Ctrl-H to return, Esc to exit)")
-
-	return Page{
-		Root:        a.createPageFrame(textView),
-		FocusTarget: textView,
-	}
 }
 
 // --- UI Creation Helpers ---
@@ -479,19 +494,47 @@ func (a *App) createGenericSearchLayout(
 	})
 
 	searchAction := func(text string) {
+		// Log entry into the searchAction function.
+		logger.Enter()
+		// Ensure that "Exiting." is logged when the function completes, regardless of how it exits.
+		defer logger.Tracef("Exiting search action dispatch.")
+
+		// Log the initial state: the raw text input.
+		logger.Tracef("Initial search text: '%s'", text)
+
 		trimmedText := strings.TrimSpace(text)
+		// Log the text after trimming whitespace.
+		logger.Tracef("Trimmed search text: '%s'", trimmedText)
+
 		// Always clear on empty input
 		if len(trimmedText) == 0 {
+			// Log that the input is empty and results are being cleared.
+			logger.Tracef("Trimmed text is empty, clearing results and details.")
 			resultsList.Clear()
 			detailsView.Clear()
+			// Log that the function is returning early due to empty input.
+			logger.Tracef("Returning early due to empty input.")
 			return
 		}
+
+		// Log the minimum search characters configured.
+		logger.Tracef("Minimum search characters required: %d", config.MinSearchChars)
 		// Check against minimum characters
 		if len(trimmedText) >= config.MinSearchChars {
+			// Log that the search text meets the minimum character requirement.
+			logger.Tracef("Search text '%s' meets minimum character requirement (%d). Calling OnSearch.", trimmedText, config.MinSearchChars)
 			config.OnSearch(trimmedText, resultsList, detailsView)
+			// Log that OnSearch has been called.
+			logger.Tracef("OnSearch function called successfully.")
 		} else {
+			// Log that the search text does not meet the minimum character requirement.
+			logger.Tracef("Search text '%s' does not meet minimum character requirement (%d).", trimmedText, config.MinSearchChars)
 			resultsList.Clear() // Clear previous results
+			// Log that previous results are being cleared.
+			logger.Tracef("Clearing previous search results.")
 			detailsView.SetText(fmt.Sprintf("[gray]Please enter at least %d character(s).", config.MinSearchChars))
+			// Log the message being set in the details view.
+			logger.Tracef("Set details view text: 'Please enter at least %d character(s).'", config.MinSearchChars)
 		}
 	}
 
@@ -515,8 +558,14 @@ func (a *App) createGenericSearchLayout(
 			}
 			return nil // Absorb the event, keeping focus on the input field
 		case tcell.KeyEnter:
-			if !config.InstantSearch {
+			logger.Tracef("12341234")
+			if config.CopyOnEnter {
+				logger.Tracef("This page has Copy-on-Enter. This entry will be copied to Main.")
 				searchAction(searchInput.GetText())
+				if resultsList.GetItemCount() == 0 {
+					logger.Tracef("This page has Copy-on-Enter. This entry will be copied to Main.")
+					a.app.SetFocus(searchInput)
+				}
 			}
 			a.app.SetFocus(resultsList)
 			return nil
@@ -600,6 +649,7 @@ func (a *App) setupMainPageWidgetHandlers() {
 			}
 			return nil
 		case tcell.KeyEnter:
+			logger.Tracef("1234")
 			a.mainInput.SetText("")
 			a.updateWordList("")
 			return nil
@@ -919,6 +969,8 @@ func (a *App) performMeaningSearch(query string, results *tview.List, details *t
 		results.SetCurrentItem(0)
 	} else {
 		details.SetText(fmt.Sprintf("No Finnish words found for '%s'.", query))
+		a.meaningInput.SetText("")
+		a.app.SetFocus(a.meaningInput)
 	}
 }
 
