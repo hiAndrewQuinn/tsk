@@ -48,6 +48,8 @@ type Gloss struct {
 // LoadWords reads the embedded words.txt file and returns a slice of strings,
 // with each string being a word from the dictionary.
 func LoadWords() ([]string, error) {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	scanner := bufio.NewScanner(strings.NewReader(wordsTxt))
 	var words []string
 	for scanner.Scan() {
@@ -67,6 +69,8 @@ func LoadWords() ([]string, error) {
 // LoadGlosses decodes the embedded glosses.gob file and returns a map where
 // keys are words and values are slices of Gloss structs.
 func LoadGlosses() (map[string][]Gloss, error) {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	reader := bytes.NewReader(glossesGob)
 	decoder := gob.NewDecoder(reader)
 
@@ -89,6 +93,8 @@ type PrefixMatcher struct {
 // NewPrefixMatcher creates and initializes a PrefixMatcher by loading phrases
 // from the embedded go-deeper.txt file.
 func NewPrefixMatcher() (*PrefixMatcher, error) {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	scanner := bufio.NewScanner(strings.NewReader(goDeeperTxt))
 	var phrases []string
 	for scanner.Scan() {
@@ -155,6 +161,8 @@ func (pm *PrefixMatcher) findLongestPrefix(s string) (string, bool) {
 // temporary file on disk and returns a connection handle. The temporary file
 // is automatically cleaned up when the program exits.
 func LoadExampleDB() (*sql.DB, error) {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	// Create a temporary file to hold the database.
 	tmpFile, err := ioutil.TempFile("", "tsk-examples-*.sqlite")
 	if err != nil {
@@ -185,6 +193,8 @@ func LoadExampleDB() (*sql.DB, error) {
 // database from the standard user config directory. If not found, it returns
 // (nil, nil) indicating it's an optional feature.
 func LoadInflectionsDB() (*sql.DB, error) {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		// Non-fatal error, as this DB is optional. Log it and continue.
@@ -218,6 +228,8 @@ func LoadInflectionsDB() (*sql.DB, error) {
 // GenerateGlossText creates a formatted string for a word's details, including
 // any "go deeper" recursive definitions. This text includes tview color tags.
 func GenerateGlossText(word string, glosses map[string][]Gloss, matcher *PrefixMatcher) string {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	glossSlice, ok := glosses[word]
 	if !ok {
 		return fmt.Sprintf("[red]%s[white]\n\nNo definition available.", word)
@@ -240,6 +252,8 @@ func GenerateGlossText(word string, glosses map[string][]Gloss, matcher *PrefixM
 
 // getDeeperGlosses is a recursive helper that looks for linkable phrases.
 func getDeeperGlosses(text string, glosses map[string][]Gloss, matcher *PrefixMatcher, level int) string {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	// We only recurse two levels deep to prevent infinite loops and excessive output.
 	if level > 2 {
 		return ""
@@ -279,6 +293,8 @@ func getDeeperGlosses(text string, glosses map[string][]Gloss, matcher *PrefixMa
 // extractTargetWord cleans up a "go deeper" target phrase to isolate the word
 // to be looked up. e.g., "a form of apple" -> "apple".
 func extractTargetWord(meaning, prefix string) string {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	target := strings.TrimPrefix(meaning, prefix)
 	target = strings.TrimSpace(target)
 	// Remove trailing punctuation.
@@ -294,6 +310,8 @@ func extractTargetWord(meaning, prefix string) string {
 }
 
 func LoadTrie() (*trie.Trie, error) {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	words, err := LoadWords()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load words for trie: %w", err)

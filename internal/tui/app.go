@@ -140,6 +140,8 @@ type GenericSearchConfig struct {
 
 // NewApp creates, initializes, and returns a new TUI application instance.
 func NewApp(version string, debug bool, wordTrie *trie.Trie, glossData map[string][]data.Gloss, matcher *data.PrefixMatcher, exDB, inflDB *sql.DB) *App {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	a := &App{
 		app:           tview.NewApplication(),
 		pages:         tview.NewPages(),
@@ -162,6 +164,8 @@ func NewApp(version string, debug bool, wordTrie *trie.Trie, glossData map[strin
 
 // Run starts the TUI application event loop.
 func (a *App) Run() error {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	fmt.Println("Starting the TUI. Thank you for your patience!")
 	if err := a.app.SetRoot(a.pages, true).Run(); err != nil {
 		return err
@@ -174,6 +178,8 @@ func (a *App) Run() error {
 
 // createPages initializes all pages of the application.
 func (a *App) createPages() {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	// Create and add all pages to the page manager
 	a.pageMap["main"] = a.createMainSearchPage()
 	a.pageMap["inflections"] = a.createInflectionSearchPage()
@@ -187,6 +193,8 @@ func (a *App) createPages() {
 
 // createMainSearchPage builds the primary search interface.
 func (a *App) createMainSearchPage() Page {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	// --- Components ---
 	a.mainInput = tview.NewInputField().SetLabel("Search: ").SetFieldWidth(30)
 	a.mainWordList = tview.NewList().ShowSecondaryText(false)
@@ -217,6 +225,8 @@ func (a *App) createMainSearchPage() Page {
 
 // createInflectionSearchPage builds the UI for searching by inflected form.
 func (a *App) createInflectionSearchPage() Page {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	theme := ModalTheme{
 		BgColor:             tcell.ColorSteelBlue,
 		HeaderFooterBg:      tcell.ColorDarkSlateGray,
@@ -237,15 +247,21 @@ func (a *App) createInflectionSearchPage() Page {
 		InstantSearch:  true,
 		MinSearchChars: 3,
 		OnSearch: func(query string, results *tview.List, details *tview.TextView) {
+			defer logger.Tracef("Exiting.")
+			logger.Enter()
 			a.performInflectionSearch(query, results, details)
 		},
 		OnResultChanged: func(mainText string, details *tview.TextView) {
+			defer logger.Tracef("Exiting.")
+			logger.Enter()
 			parts := strings.Split(mainText, " ~> ")
 			if len(parts) == 2 {
 				details.SetText(data.GenerateGlossText(parts[1], a.glosses, a.prefixMatcher)).ScrollToBeginning()
 			}
 		},
 		OnResultSelected: func(mainText string) {
+			defer logger.Tracef("Exiting.")
+			logger.Enter()
 			baseWord := mainText
 			if parts := strings.Split(mainText, " ~> "); len(parts) == 2 {
 				baseWord = parts[1]
@@ -270,6 +286,8 @@ func (a *App) createInflectionSearchPage() Page {
 
 // createMeaningSearchPage builds the UI for reverse-searching by English meaning.
 func (a *App) createMeaningSearchPage() Page {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	theme := ModalTheme{
 		BgColor:             tcell.GetColor("#002b36"), // Solarized Dark Base
 		HeaderFooterBg:      tcell.GetColor("#073642"), // Solarized Dark Base02
@@ -290,12 +308,18 @@ func (a *App) createMeaningSearchPage() Page {
 		InstantSearch:  false,
 		MinSearchChars: 1,
 		OnSearch: func(query string, results *tview.List, details *tview.TextView) {
+			defer logger.Tracef("Exiting.")
+			logger.Enter()
 			a.performMeaningSearch(query, results, details)
 		},
 		OnResultChanged: func(mainText string, details *tview.TextView) {
+			defer logger.Tracef("Exiting.")
+			logger.Enter()
 			details.SetText(data.GenerateGlossText(mainText, a.glosses, a.prefixMatcher)).ScrollToBeginning()
 		},
 		OnResultSelected: func(finnishWord string) {
+			defer logger.Tracef("Exiting.")
+			logger.Enter()
 			a.mainInput.SetText(finnishWord)
 			a.updateWordList(finnishWord)
 			a.switchPage("main")
@@ -316,6 +340,8 @@ func (a *App) createMeaningSearchPage() Page {
 
 // createHelpPage builds the static help screen.
 func (a *App) createHelpPage() Page {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	textView := tview.NewTextView().
 		SetDynamicColors(true).
 		SetText(helpText).
@@ -332,6 +358,8 @@ func (a *App) createHelpPage() Page {
 
 // createPageFrame builds the standard layout with a header, footer, and content area.
 func (a *App) createPageFrame(content tview.Primitive) *tview.Flex {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	header := a.createHeader()
 	footer := a.createFooter()
 
@@ -348,6 +376,8 @@ func (a *App) createPageFrame(content tview.Primitive) *tview.Flex {
 
 // createHeader creates the top header component.
 func (a *App) createHeader() *tview.Flex {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	headerLeft := tview.NewTextView().
 		SetText(fmt.Sprintf("tsk (%s) - Andrew's Pocket Finnish Dictionary", a.version)).
 		SetTextAlign(tview.AlignLeft).
@@ -357,6 +387,8 @@ func (a *App) createHeader() *tview.Flex {
 	headerRight := tview.NewButton("[::u]https://github.com/hiAndrewQuinn/tsk[::-]").
 		SetLabelColor(tcell.ColorWhite).
 		SetSelectedFunc(func() { openBrowser("https://github.com/hiAndrewQuinn/tsk") })
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	headerRight.SetBackgroundColor(tcell.ColorBlue)
 
 	headerFlex := tview.NewFlex().
@@ -370,6 +402,8 @@ func (a *App) createHeader() *tview.Flex {
 
 // createFooter creates the bottom footer component.
 func (a *App) createFooter() *tview.Flex {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	footerLeft := tview.NewTextView().
 		SetText("Ctrl-H for Help. Esc to exit.").
 		SetTextAlign(tview.AlignLeft).
@@ -379,6 +413,8 @@ func (a *App) createFooter() *tview.Flex {
 	footerRight := tview.NewButton("[::u]https://andrew-quinn.me/[::-]").
 		SetLabelColor(tcell.ColorWhite).
 		SetSelectedFunc(func() { openBrowser("https://andrew-quinn.me/") })
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	footerRight.SetBackgroundColor(tcell.ColorBlue)
 
 	footerFlex := tview.NewFlex().
@@ -394,6 +430,8 @@ func (a *App) createFooter() *tview.Flex {
 func (a *App) createGenericSearchLayout(
 	config GenericSearchConfig,
 ) (tview.Primitive, *tview.InputField, *tview.List, *tview.TextView) {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	// --- Components ---
 	searchInput := tview.NewInputField().
 		SetLabel(config.SearchLabel).
@@ -493,7 +531,11 @@ func (a *App) createGenericSearchLayout(
 
 // setupGlobalInputCapture sets up the application-wide key bindings, which act as a router.
 func (a *App) setupGlobalInputCapture() {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	a.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		defer logger.Tracef("Exiting.")
+		logger.Enter()
 		switch event.Key() {
 		case tcell.KeyEsc:
 			a.app.Stop()
@@ -508,7 +550,8 @@ func (a *App) setupGlobalInputCapture() {
 			a.togglePage("inflections")
 			return nil
 		case tcell.KeyCtrlH:
-			a.togglePage("help")
+			a.togglePage("main")
+			a.mainDetailsView.SetText(helpText) // Show help on startup
 			return nil
 		case tcell.KeyCtrlT:
 			a.handleActionWithContext(a.showExampleSentences)
@@ -526,15 +569,23 @@ func (a *App) setupGlobalInputCapture() {
 
 // setupMainPageWidgetHandlers configures event handlers for the main search page.
 func (a *App) setupMainPageWidgetHandlers() {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	a.mainWordList.SetChangedFunc(func(idx int, mainText string, _ string, _ rune) {
+		defer logger.Tracef("Exiting.")
+		logger.Enter()
 		a.displayGloss(mainText)
 	})
 
 	a.mainInput.SetChangedFunc(func(text string) {
+		defer logger.Tracef("Exiting.")
+		logger.Enter()
 		a.updateWordList(text)
 	})
 
 	a.mainInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		defer logger.Tracef("Exiting.")
+		logger.Enter()
 		switch event.Key() {
 		case tcell.KeyDown:
 			cur := a.mainWordList.GetCurrentItem()
@@ -557,6 +608,8 @@ func (a *App) setupMainPageWidgetHandlers() {
 	})
 
 	a.mainDetailsView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		defer logger.Tracef("Exiting.")
+		logger.Enter()
 		switch event.Key() {
 		case tcell.KeyTab:
 			row, col := a.mainDetailsView.GetScrollOffset()
@@ -576,6 +629,8 @@ func (a *App) setupMainPageWidgetHandlers() {
 // togglePage switches to the given page if not currently on it,
 // otherwise switches back to the main page.
 func (a *App) togglePage(pageName string) {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	current, _ := a.pages.GetFrontPage()
 	if current == pageName {
 		a.switchPage("main")
@@ -587,6 +642,8 @@ func (a *App) togglePage(pageName string) {
 // handleActionWithContext ensures that word-based actions (like marking a word or showing examples)
 // are executed in the context of the main page.
 func (a *App) handleActionWithContext(action func()) {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	name, _ := a.pages.GetFrontPage()
 
 	if name != "main" {
@@ -625,6 +682,8 @@ func (a *App) handleActionWithContext(action func()) {
 
 // switchPage changes the visible page and sets focus to the correct element.
 func (a *App) switchPage(name string) {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	if page, ok := a.pageMap[name]; ok {
 		// When switching to a modal search page, clear its previous state first.
 		switch name {
@@ -659,6 +718,8 @@ func (a *App) switchPage(name string) {
 
 // updateWordList clears and repopulates the main word list based on search text.
 func (a *App) updateWordList(text string) {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	a.mainWordList.Clear()
 	if text != "" {
 		matches := a.trie.FindWords(text)
@@ -673,6 +734,8 @@ func (a *App) updateWordList(text string) {
 
 // displayGloss shows the definition for the given word in the main details view.
 func (a *App) displayGloss(word string) {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	logger.Tracef("called for word: %s", word)
 
 	_, isMarked := a.markedWords[word]
@@ -694,6 +757,8 @@ func (a *App) displayGloss(word string) {
 
 // toggleMarkedWord adds or removes the currently selected word from the marked list.
 func (a *App) toggleMarkedWord() {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	if a.mainWordList.GetItemCount() == 0 {
 		a.mainDetailsView.SetTitle("Error").SetBorderColor(tcell.ColorRed).SetTitleColor(tcell.ColorRed)
 		a.mainDetailsView.SetText("\n  [red]You need to search for something before you can mark or unmark it.[white]")
@@ -714,6 +779,8 @@ func (a *App) toggleMarkedWord() {
 
 // listMarkedWords displays all currently marked words in the details view.
 func (a *App) listMarkedWords() {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	count := len(a.markedWords)
 	if count == 0 {
 		a.mainDetailsView.SetTitle("Marked words list empty. Kotimaa itkee...").SetBorderColor(tcell.ColorGreen).SetTitleColor(tcell.ColorGreen)
@@ -738,6 +805,8 @@ func (a *App) listMarkedWords() {
 
 // showExampleSentences queries and displays example sentences for the selected word.
 func (a *App) showExampleSentences() {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	if a.mainWordList.GetItemCount() == 0 {
 		a.mainDetailsView.SetTitle("No word selected. Kotimaa itkee...").SetBorderColor(tcell.ColorTeal).SetTitleColor(tcell.ColorTeal)
 		a.mainDetailsView.SetText(finnishFlag)
@@ -784,6 +853,8 @@ func (a *App) showExampleSentences() {
 
 // performInflectionSearch handles the logic for the inflection search page.
 func (a *App) performInflectionSearch(query string, results *tview.List, details *tview.TextView) {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	results.Clear()
 	details.Clear()
 
@@ -816,6 +887,8 @@ func (a *App) performInflectionSearch(query string, results *tview.List, details
 
 // performMeaningSearch handles the logic for the meaning search page.
 func (a *App) performMeaningSearch(query string, results *tview.List, details *tview.TextView) {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	results.Clear()
 	details.Clear()
 	trimmedQuery := strings.ToLower(query)
@@ -853,6 +926,8 @@ func (a *App) performMeaningSearch(query string, results *tview.List, details *t
 
 // saveMarkedWords writes the list of marked words to timestamped files.
 func (a *App) saveMarkedWords() error {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	if len(a.markedWords) == 0 {
 		return nil
 	}
@@ -905,6 +980,8 @@ func (a *App) saveMarkedWords() error {
 
 // openBrowser opens the specified URL in the default browser.
 func openBrowser(url string) error {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "linux":
@@ -921,6 +998,8 @@ func openBrowser(url string) error {
 
 // cleanTerm removes leading/trailing non-letters from a string.
 func cleanTerm(s string) string {
+	defer logger.Tracef("Exiting.")
+	logger.Enter()
 	start, end := 0, len(s)
 	for start < end && !unicode.IsLetter(rune(s[start])) {
 		start++
