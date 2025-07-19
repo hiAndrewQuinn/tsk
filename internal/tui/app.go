@@ -16,8 +16,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/gdamore/tcell/v2"
 
 	"github.com/hiAndrewQuinn/tsk/internal/data"
 	"github.com/hiAndrewQuinn/tsk/internal/trie"
@@ -27,18 +27,18 @@ import (
 
 const helpText = `[gray]
 	Keybindings:
-	Esc         = Go back, or exit from main screen
+	Esc         = Exit the application
 	Up/Down     = Scroll lists
 	Tab/Shift-Tab = Scroll details view on main screen
 
-	[blue]Ctrl-E[gray]      = [blue]Etsi perusmuoto (lemmatizer)[gray]. Find a word's base form.
+	[blue]Ctrl-E[gray]      = Toggle [blue]Etsi perusmuoto (lemmatizer)[gray] search.
 	[teal]Ctrl-T[gray]      = Show [teal]example sentences[gray] for the selected word.
 	[yellow]Ctrl-S[gray]    = [yellow]Mark[gray]/unmark the selected word for export.
 	[green]Ctrl-L[gray]      = [green]List[gray] all marked words.
-	[cyan]Ctrl-F[gray]      = [cyan]Reverse-find[gray] words by English definition.
-	[pink]Ctrl-H[gray]      = Show this [pink]help[gray] screen.
+	[cyan]Ctrl-F[gray]      = Toggle [cyan]Reverse-find[gray] by English definition.
+	[pink]Ctrl-H[gray]      = Toggle this [pink]help[gray] screen.
 
-	[red]Ctrl-R[gray]      = [red]Report a bug[gray] on GitHub.com. [red]Opens your web browser[gray].
+	[red]Ctrl-R[gray]       = [red]Report a bug[gray] on GitHub.com. [red]Opens your web browser[gray].
 	[white]`
 
 const finnishFlag = `[gray]
@@ -54,20 +54,20 @@ const finnishFlag = `[gray]
               |:'.     ######,6####|
               |..       ;############|
               ":_,###############|
-                 |##############'~ |
-                 |############".   |
-                .###########':     |
-                :##".   #####. '   |
-                | :'    ######.   .|
-                |.'      ######     |
-                |.       ######   ':|
-                ":       ######   .:.|
-                 |      ."#####    ._|
-                 |        :#####_,-'""
-                 |    '.,###""
-                :'  .:,-'
-                |_.,-'
-                "
+                  |##############'~ |
+                  |############".   |
+                  .###########':     |
+                  :##".   #####. '   |
+                  | :'    ######.   .|
+                  |.'     ######     |
+                  |.       ######   ':|
+                  ":       ######   .:.|
+                   |      ."#####    ._|
+                   |         :#####_,-'""
+                   |      '.,###""
+                   :'  .:,-'
+                   |_.,-'
+                   "
 	[white]`
 
 // --- Type Definitions ---
@@ -88,10 +88,12 @@ type App struct {
 	// Page management
 	pageMap map[string]Page
 
-	// Shared tview components (used across pages)
-	inputField  *tview.InputField
-	wordList    *tview.List
-	detailsView *tview.TextView
+	// Components by page
+	mainInput       *tview.InputField
+	mainWordList    *tview.List
+	mainDetailsView *tview.TextView
+	inflectionList  *tview.List
+	meaningList     *tview.List
 
 	// Data and state
 	version       string
@@ -168,30 +170,30 @@ func (a *App) createPages() {
 // createMainSearchPage builds the primary search interface.
 func (a *App) createMainSearchPage() Page {
 	// --- Components ---
-	a.inputField = tview.NewInputField().SetLabel("Search: ").SetFieldWidth(30)
-	a.wordList = tview.NewList().ShowSecondaryText(false)
-	a.detailsView = tview.NewTextView().
+	a.mainInput = tview.NewInputField().SetLabel("Search: ").SetFieldWidth(30)
+	a.mainWordList = tview.NewList().ShowSecondaryText(false)
+	a.mainDetailsView = tview.NewTextView().
 		SetDynamicColors(true).
 		SetWrap(true).
 		SetWordWrap(true)
-	a.detailsView.SetBorder(true)
-	a.detailsView.SetText(helpText) // Show help on startup
+	a.mainDetailsView.SetBorder(true)
+	a.mainDetailsView.SetText(helpText) // Show help on startup
 
 	// --- Layout ---
 	leftFlex := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(a.inputField, 3, 1, true).
-		AddItem(a.wordList, 0, 4, false)
+		AddItem(a.mainInput, 3, 1, true).
+		AddItem(a.mainWordList, 0, 4, false)
 
 	topFlex := tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(leftFlex, 0, 1, true).
-		AddItem(a.detailsView, 0, 2, false)
+		AddItem(a.mainDetailsView, 0, 2, false)
 
 	// --- Handlers ---
 	a.setupMainPageWidgetHandlers()
 
 	return Page{
 		Root:        a.createPageFrame(topFlex),
-		FocusTarget: a.inputField,
+		FocusTarget: a.mainInput,
 	}
 }
 
@@ -209,7 +211,7 @@ func (a *App) createInflectionSearchPage() Page {
 	}
 
 	onSelect := func(baseWord string) {
-		a.inputField.SetText(baseWord)
+		a.mainInput.SetText(baseWord)
 		a.updateWordList(baseWord)
 		a.switchPage("main")
 	}
@@ -228,9 +230,10 @@ func (a *App) createInflectionSearchPage() Page {
 	title := fmt.Sprintf("tsk (%s) - Inflection Search", a.version)
 	searchLabel := "Inflected form: "
 	detailsTitle := "Base Form Details"
-	footerText := "Esc to return to main search. Enter on result to select."
+	footerText := "Esc to exit. Ctrl-E to return to main search. Enter on result to select."
 
-	pageContent, searchInput := a.createGenericSearchLayout(title, searchLabel, detailsTitle, footerText, theme, onSearch, onResultChanged, onSelect)
+	pageContent, searchInput, list := a.createGenericSearchLayout(title, searchLabel, detailsTitle, footerText, theme, onSearch, onResultChanged, onSelect)
+	a.inflectionList = list // Store reference to the list
 
 	return Page{
 		Root:        a.createPageFrame(pageContent),
@@ -252,7 +255,7 @@ func (a *App) createMeaningSearchPage() Page {
 	}
 
 	onSelect := func(finnishWord string) {
-		a.inputField.SetText(finnishWord)
+		a.mainInput.SetText(finnishWord)
 		a.updateWordList(finnishWord)
 		a.switchPage("main")
 	}
@@ -268,9 +271,10 @@ func (a *App) createMeaningSearchPage() Page {
 	title := fmt.Sprintf("tsk (%s) - English->Finnish Reverse Search", a.version)
 	searchLabel := "English term: "
 	detailsTitle := "Finnish Word Details"
-	footerText := "Esc to return to main search. Enter on result to select."
+	footerText := "Esc to exit. Ctrl-F to return to main search. Enter on result to select."
 
-	pageContent, searchInput := a.createGenericSearchLayout(title, searchLabel, detailsTitle, footerText, theme, onSearch, onResultChanged, onSelect)
+	pageContent, searchInput, list := a.createGenericSearchLayout(title, searchLabel, detailsTitle, footerText, theme, onSearch, onResultChanged, onSelect)
+	a.meaningList = list // Store reference to the list
 
 	return Page{
 		Root:        a.createPageFrame(pageContent),
@@ -284,16 +288,10 @@ func (a *App) createHelpPage() Page {
 		SetDynamicColors(true).
 		SetText(helpText).
 		SetScrollable(true)
-	textView.SetBorder(true).SetTitle("Help (Esc to return)")
+	textView.SetBorder(true).SetTitle("Help (Ctrl-H to return, Esc to exit)")
 
-	// The page itself needs an input capture to handle Esc
-	textView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEsc {
-			a.switchPage("main")
-			return nil
-		}
-		return event
-	})
+	// NOTE: The local 'Esc' handler was removed.
+	// The global input capture now handles Esc to exit the entire application.
 
 	return Page{
 		Root:        a.createPageFrame(textView),
@@ -344,7 +342,7 @@ func (a *App) createHeader() *tview.Flex {
 // createFooter creates the bottom footer component.
 func (a *App) createFooter() *tview.Flex {
 	footerLeft := tview.NewTextView().
-		SetText("Ctrl-H for Help. Esc to go back/exit.").
+		SetText("Ctrl-H for Help. Esc to exit.").
 		SetTextAlign(tview.AlignLeft).
 		SetTextColor(tcell.ColorBlack)
 	footerLeft.SetBackgroundColor(tcell.ColorLightGray)
@@ -370,7 +368,7 @@ func (a *App) createGenericSearchLayout(
 	onSearchChanged func(query string, results *tview.List, details *tview.TextView),
 	onResultChanged func(mainText string, details *tview.TextView),
 	onResultSelected func(mainText string),
-) (tview.Primitive, *tview.InputField) {
+) (tview.Primitive, *tview.InputField, *tview.List) {
 
 	// --- Components ---
 	searchInput := tview.NewInputField().
@@ -423,10 +421,9 @@ func (a *App) createGenericSearchLayout(
 	})
 
 	searchInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		// NOTE: The local 'Esc' handler was removed.
+		// The global input capture now handles Esc to exit the entire application.
 		switch event.Key() {
-		case tcell.KeyEsc:
-			a.switchPage("main")
-			return nil
 		case tcell.KeyDown, tcell.KeyEnter:
 			a.app.SetFocus(resultsList)
 			return nil
@@ -434,7 +431,7 @@ func (a *App) createGenericSearchLayout(
 		return event
 	})
 
-	return contentFlex, searchInput
+	return contentFlex, searchInput, resultsList
 }
 
 // --- Event Handlers & Actions ---
@@ -444,90 +441,137 @@ func (a *App) setupGlobalInputCapture() {
 	a.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyEsc:
-			// If not on the main page, Esc returns to main. If on main, it stops the app.
-			name, _ := a.pages.GetFrontPage()
-			if name != "main" {
-				a.switchPage("main")
-				return nil
-			}
+			// Per user request, Esc always exits the application.
 			a.app.Stop()
 			return nil
 		case tcell.KeyCtrlR:
 			openBrowser("https://github.com/hiAndrewQuinn/tsk/issues/new")
 			return nil
 		case tcell.KeyCtrlF:
-			a.switchPage("meanings")
+			a.togglePage("meanings")
 			return nil
 		case tcell.KeyCtrlE:
-			a.switchPage("inflections")
-			return nil
-		case tcell.KeyCtrlT:
-			a.showExampleSentences() // This remains a context-sensitive action on the main page
+			a.togglePage("inflections")
 			return nil
 		case tcell.KeyCtrlH:
-			a.switchPage("help")
+			a.togglePage("help")
+			return nil
+		case tcell.KeyCtrlT:
+			a.handleActionWithContext(a.showExampleSentences)
 			return nil
 		case tcell.KeyCtrlL:
-			a.listMarkedWords() // Context-sensitive action on main page
+			a.handleActionWithContext(a.listMarkedWords)
 			return nil
 		case tcell.KeyCtrlS:
-			a.toggleMarkedWord() // Context-sensitive action on main page
+			a.handleActionWithContext(a.toggleMarkedWord)
 			return nil
 		}
-
-		// Allow page-specific captures to handle other keys.
-		// If the global handler doesn't handle the key, it's passed to the focused primitive.
 		return event
 	})
 }
 
 // setupMainPageWidgetHandlers configures event handlers for the main search page.
 func (a *App) setupMainPageWidgetHandlers() {
-	a.wordList.SetChangedFunc(func(idx int, mainText string, _ string, _ rune) {
+	a.mainWordList.SetChangedFunc(func(idx int, mainText string, _ string, _ rune) {
 		a.displayGloss(mainText)
 	})
 
-	a.inputField.SetChangedFunc(func(text string) {
+	a.mainInput.SetChangedFunc(func(text string) {
 		a.updateWordList(text)
 	})
 
-	a.inputField.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+	a.mainInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyDown:
-			cur := a.wordList.GetCurrentItem()
-			if cur < a.wordList.GetItemCount()-1 {
-				a.wordList.SetCurrentItem(cur + 1)
+			cur := a.mainWordList.GetCurrentItem()
+			if cur < a.mainWordList.GetItemCount()-1 {
+				a.mainWordList.SetCurrentItem(cur + 1)
 			}
 			return nil
 		case tcell.KeyUp:
-			cur := a.wordList.GetCurrentItem()
+			cur := a.mainWordList.GetCurrentItem()
 			if cur > 0 {
-				a.wordList.SetCurrentItem(cur - 1)
+				a.mainWordList.SetCurrentItem(cur - 1)
 			}
 			return nil
 		case tcell.KeyEnter:
-			a.inputField.SetText("")
+			a.mainInput.SetText("")
 			a.updateWordList("")
 			return nil
 		}
 		return event
 	})
 
-	a.detailsView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+	a.mainDetailsView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyTab:
-			row, col := a.detailsView.GetScrollOffset()
-			a.detailsView.ScrollTo(row+1, col)
+			row, col := a.mainDetailsView.GetScrollOffset()
+			a.mainDetailsView.ScrollTo(row+1, col)
 			return nil
 		case tcell.KeyBacktab:
-			row, col := a.detailsView.GetScrollOffset()
+			row, col := a.mainDetailsView.GetScrollOffset()
 			if row > 0 {
-				a.detailsView.ScrollTo(row-1, col)
+				a.mainDetailsView.ScrollTo(row-1, col)
 			}
 			return nil
 		}
 		return event
 	})
+}
+
+// togglePage switches to the given page if not currently on it,
+// otherwise switches back to the main page.
+func (a *App) togglePage(pageName string) {
+	current, _ := a.pages.GetFrontPage()
+	if current == pageName {
+		a.switchPage("main")
+	} else {
+		a.switchPage(pageName)
+	}
+}
+
+// handleActionWithContext ensures that word-based actions (like marking a word or showing examples)
+// are executed in the context of the main page. If called from another page,
+// it preserves the currently selected word, returns to the main page,
+// and then executes the action.
+func (a *App) handleActionWithContext(action func()) {
+	name, _ := a.pages.GetFrontPage()
+
+	if name != "main" {
+		var selectedList *tview.List
+		switch name {
+		case "inflections":
+			selectedList = a.inflectionList
+		case "meanings":
+			selectedList = a.meaningList
+		default:
+			// For pages without a list (e.g., help), just switch to main
+			a.switchPage("main")
+			action()
+			return
+		}
+
+		// If there is a list and it has items, grab the selected one
+		if selectedList != nil && selectedList.GetItemCount() > 0 {
+			idx := selectedList.GetCurrentItem()
+			mainText, _ := selectedList.GetItemText(idx)
+			wordToSearch := mainText
+
+			// For inflections, we want the base word (e.g., from "juoksen ~> juosta")
+			if name == "inflections" {
+				if parts := strings.Split(mainText, " ~> "); len(parts) == 2 {
+					wordToSearch = parts[1]
+				}
+			}
+
+			a.switchPage("main")
+			a.mainInput.SetText(wordToSearch) // This repopulates the main list
+		} else {
+			a.switchPage("main") // Switch to main even if no word is selected
+		}
+	}
+
+	action()
 }
 
 // switchPage changes the visible page and sets focus to the correct element.
@@ -542,15 +586,15 @@ func (a *App) switchPage(name string) {
 
 // updateWordList clears and repopulates the main word list based on search text.
 func (a *App) updateWordList(text string) {
-	a.wordList.Clear()
+	a.mainWordList.Clear()
 	if text != "" {
 		matches := a.trie.FindWords(text)
 		for _, w := range matches {
-			a.wordList.AddItem(w, "", 0, nil)
+			a.mainWordList.AddItem(w, "", 0, nil)
 		}
 	}
-	if a.wordList.GetItemCount() > 0 {
-		a.wordList.SetCurrentItem(0)
+	if a.mainWordList.GetItemCount() > 0 {
+		a.mainWordList.SetCurrentItem(0)
 	}
 }
 
@@ -562,30 +606,30 @@ func (a *App) displayGloss(word string) {
 
 	_, isMarked := a.markedWords[word]
 	if isMarked {
-		a.detailsView.SetTitle("Word Details (Ctrl-S to unmark)")
-		a.detailsView.SetBorderColor(tcell.ColorYellow)
-		a.detailsView.SetTitleColor(tcell.ColorYellow)
-		a.wordList.SetSelectedBackgroundColor(tcell.ColorYellow)
+		a.mainDetailsView.SetTitle("Word Details (Ctrl-S to unmark)")
+		a.mainDetailsView.SetBorderColor(tcell.ColorYellow)
+		a.mainDetailsView.SetTitleColor(tcell.ColorYellow)
+		a.mainWordList.SetSelectedBackgroundColor(tcell.ColorYellow)
 	} else {
-		a.detailsView.SetTitle("Word Details (Ctrl-S to mark)")
-		a.detailsView.SetBorderColor(tcell.ColorWhite)
-		a.detailsView.SetTitleColor(tcell.ColorWhite)
-		a.wordList.SetSelectedBackgroundColor(tcell.ColorWhite)
+		a.mainDetailsView.SetTitle("Word Details (Ctrl-S to mark)")
+		a.mainDetailsView.SetBorderColor(tcell.ColorWhite)
+		a.mainDetailsView.SetTitleColor(tcell.ColorWhite)
+		a.mainWordList.SetSelectedBackgroundColor(tcell.ColorWhite)
 	}
 
 	glossText := data.GenerateGlossText(word, a.glosses, a.prefixMatcher)
-	a.detailsView.SetText(glossText).ScrollToBeginning()
+	a.mainDetailsView.SetText(glossText).ScrollToBeginning()
 }
 
 // toggleMarkedWord adds or removes the currently selected word from the marked list.
 func (a *App) toggleMarkedWord() {
-	if a.wordList.GetItemCount() == 0 {
-		a.detailsView.SetTitle("Error").SetBorderColor(tcell.ColorRed).SetTitleColor(tcell.ColorRed)
-		a.detailsView.SetText("\n  [red]You need to search for something before you can mark or unmark it.[white]")
+	if a.mainWordList.GetItemCount() == 0 {
+		a.mainDetailsView.SetTitle("Error").SetBorderColor(tcell.ColorRed).SetTitleColor(tcell.ColorRed)
+		a.mainDetailsView.SetText("\n  [red]You need to search for something before you can mark or unmark it.[white]")
 		return
 	}
-	idx := a.wordList.GetCurrentItem()
-	word, _ := a.wordList.GetItemText(idx)
+	idx := a.mainWordList.GetCurrentItem()
+	word, _ := a.mainWordList.GetItemText(idx)
 
 	if _, present := a.markedWords[word]; present {
 		delete(a.markedWords, word)
@@ -605,10 +649,10 @@ func (a *App) toggleMarkedWord() {
 func (a *App) listMarkedWords() {
 	count := len(a.markedWords)
 	if count == 0 {
-		a.detailsView.SetTitle("Marked words list empty. Kotimaa itkee...").SetBorderColor(tcell.ColorGreen).SetTitleColor(tcell.ColorGreen)
-		a.detailsView.SetText(finnishFlag)
+		a.mainDetailsView.SetTitle("Marked words list empty. Kotimaa itkee...").SetBorderColor(tcell.ColorGreen).SetTitleColor(tcell.ColorGreen)
+		a.mainDetailsView.SetText(finnishFlag)
 	} else {
-		a.detailsView.SetTitle(fmt.Sprintf("Listing marked words. (count: %d)", count)).SetBorderColor(tcell.ColorGreen).SetTitleColor(tcell.ColorGreen)
+		a.mainDetailsView.SetTitle(fmt.Sprintf("Listing marked words. (count: %d)", count)).SetBorderColor(tcell.ColorGreen).SetTitleColor(tcell.ColorGreen)
 		sortedWords := make([]string, 0, len(a.markedWords))
 		for w := range a.markedWords {
 			sortedWords = append(sortedWords, w)
@@ -621,28 +665,28 @@ func (a *App) listMarkedWords() {
 			builder.WriteString(w + "\n")
 		}
 		builder.WriteString("\n\n[gray]Note: Exported files do not include 'go-deeper' phrases automatically.[white]")
-		a.detailsView.SetText(builder.String())
+		a.mainDetailsView.SetText(builder.String())
 	}
 }
 
 // showExampleSentences queries and displays example sentences for the selected word.
 func (a *App) showExampleSentences() {
-	if a.wordList.GetItemCount() == 0 {
-		a.detailsView.SetTitle("No word selected. Kotimaa itkee...").SetBorderColor(tcell.ColorTeal).SetTitleColor(tcell.ColorTeal)
-		a.detailsView.SetText(finnishFlag)
+	if a.mainWordList.GetItemCount() == 0 {
+		a.mainDetailsView.SetTitle("No word selected. Kotimaa itkee...").SetBorderColor(tcell.ColorTeal).SetTitleColor(tcell.ColorTeal)
+		a.mainDetailsView.SetText(finnishFlag)
 		return
 	}
-	idx := a.wordList.GetCurrentItem()
-	word, _ := a.wordList.GetItemText(idx)
+	idx := a.mainWordList.GetCurrentItem()
+	word, _ := a.mainWordList.GetItemText(idx)
 	if strings.TrimSpace(word) == "" {
-		a.detailsView.SetText("[teal]No word entered. Please type something in the search bar.[white]")
+		a.mainDetailsView.SetText("[teal]No word entered. Please type something in the search bar.[white]")
 		return
 	}
 
 	phrase := `"` + cleanTerm(word) + `"`
 	rows, err := a.exampleDB.Query(`SELECT finnish, english FROM sentences WHERE sentences MATCH ?`, phrase)
 	if err != nil {
-		a.detailsView.SetText(fmt.Sprintf("Error querying examples: %v", err)).SetBorderColor(tcell.ColorRed)
+		a.mainDetailsView.SetText(fmt.Sprintf("Error querying examples: %v", err)).SetBorderColor(tcell.ColorRed)
 		return
 	}
 	defer rows.Close()
@@ -660,13 +704,13 @@ func (a *App) showExampleSentences() {
 	}
 
 	if !found {
-		a.detailsView.SetTitle("No examples found")
-		a.detailsView.SetText("[red]No Tatoeba example sentences found.[white]")
+		a.mainDetailsView.SetTitle("No examples found")
+		a.mainDetailsView.SetText("[red]No Tatoeba example sentences found.[white]")
 	} else {
-		a.detailsView.SetTitle(fmt.Sprintf("Examples for '%s'", word))
-		a.detailsView.SetText(buf.String())
+		a.mainDetailsView.SetTitle(fmt.Sprintf("Examples for '%s'", word))
+		a.mainDetailsView.SetText(buf.String())
 	}
-	a.detailsView.SetBorderColor(tcell.ColorTeal).SetTitleColor(tcell.ColorTeal)
+	a.mainDetailsView.SetBorderColor(tcell.ColorTeal).SetTitleColor(tcell.ColorTeal)
 }
 
 // --- Search Logic ---
@@ -828,4 +872,3 @@ func cleanTerm(s string) string {
 	}
 	return s[start:end]
 }
-
