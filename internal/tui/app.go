@@ -19,18 +19,76 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
-	// Import your internal packages.
-	// The paths must match your module structure.
-
 	"github.com/hiAndrewQuinn/tsk/internal/data"
 	"github.com/hiAndrewQuinn/tsk/internal/trie"
 )
 
+// --- Constants ---
+
+const helpText = `[gray]
+	Keybindings:
+	Esc         = Go back, or exit from main screen
+	Up/Down     = Scroll lists
+	Tab/Shift-Tab = Scroll details view on main screen
+
+	[blue]Ctrl-E[gray]      = [blue]Etsi perusmuoto (lemmatizer)[gray]. Find a word's base form.
+	[teal]Ctrl-T[gray]      = Show [teal]example sentences[gray] for the selected word.
+	[yellow]Ctrl-S[gray]    = [yellow]Mark[gray]/unmark the selected word for export.
+	[green]Ctrl-L[gray]      = [green]List[gray] all marked words.
+	[cyan]Ctrl-F[gray]      = [cyan]Reverse-find[gray] words by English definition.
+	[pink]Ctrl-H[gray]      = Show this [pink]help[gray] screen.
+
+	[red]Ctrl-R[gray]      = [red]Report a bug[gray] on GitHub.com. [red]Opens your web browser[gray].
+	[white]`
+
+const finnishFlag = `[gray]
+                            _,-(.;)
+                          _,-',###""
+                        _,-',###",'|
+                      _,-',###" ,-" :|
+                    _,-',###" _,#"   .'|
+          ### _,-',###"_,######   : |
+        _,-',###;-'"~. #####9   :' |
+      ,###"   |   :  ######  ,. _|
+      "       | :     #####( .;###|
+              |:'.     ######,6####|
+              |..       ;############|
+              ":_,###############|
+                 |##############'~ |
+                 |############".   |
+                .###########':     |
+                :##".   #####. '   |
+                | :'    ######.   .|
+                |.'      ######     |
+                |.       ######   ':|
+                ":       ######   .:.|
+                 |      ."#####    ._|
+                 |        :#####_,-'""
+                 |    '.,###""
+                :'  .:,-'
+                |_.,-'
+                "
+	[white]`
+
+// --- Type Definitions ---
+
+// Page encapsulates a tview.Primitive that represents a single screen,
+// and a reference to the Primitive that should receive focus when the page is shown.
+type Page struct {
+	Root        tview.Primitive
+	FocusTarget tview.Primitive
+}
+
 // App encapsulates all the components and state of the TUI.
 type App struct {
-	// tview components
-	app         *tview.Application
-	pages       *tview.Pages
+	// tview core
+	app   *tview.Application
+	pages *tview.Pages
+
+	// Page management
+	pageMap map[string]Page
+
+	// Shared tview components (used across pages)
 	inputField  *tview.InputField
 	wordList    *tview.List
 	detailsView *tview.TextView
@@ -46,12 +104,26 @@ type App struct {
 	markedWords   map[string]struct{}
 }
 
+// ModalTheme defines the complete color scheme for a search page.
+type ModalTheme struct {
+	BgColor               tcell.Color
+	HeaderFooterBg        tcell.Color
+	DetailsBg             tcell.Color
+	PrimaryTextColor      tcell.Color
+	AccentColor           tcell.Color
+	FieldBgColor          tcell.Color
+	ListSelectedBgColor   tcell.Color
+	ListSelectedTextColor tcell.Color
+}
+
+// --- Initialization ---
+
 // NewApp creates, initializes, and returns a new TUI application instance.
-// It takes all the pre-loaded data as dependencies.
 func NewApp(version string, debug bool, wordTrie *trie.Trie, glossData map[string][]data.Gloss, matcher *data.PrefixMatcher, exDB, inflDB *sql.DB) *App {
 	a := &App{
 		app:           tview.NewApplication(),
 		pages:         tview.NewPages(),
+		pageMap:       make(map[string]Page),
 		version:       version,
 		debug:         debug,
 		trie:          wordTrie,
@@ -62,7 +134,7 @@ func NewApp(version string, debug bool, wordTrie *trie.Trie, glossData map[strin
 		markedWords:   make(map[string]struct{}),
 	}
 
-	a.setupUI()
+	a.createPages()
 	a.setupGlobalInputCapture()
 
 	return a
@@ -74,74 +146,351 @@ func (a *App) Run() error {
 	if err := a.app.SetRoot(a.pages, true).Run(); err != nil {
 		return err
 	}
-
-	// This code runs after the TUI has been stopped.
 	fmt.Println("Stopping the TUI. Thank you for exiting gracefully!")
 	return a.saveMarkedWords()
 }
 
-// setupUI initializes all tview widgets and lays them out.
-func (a *App) setupUI() {
-	// --- Header ---
-	header := a.createHeader()
+// --- Page Creation ---
 
-	// --- Left Pane: Search Input & List ---
+// createPages initializes all pages of the application.
+func (a *App) createPages() {
+	// Create and add all pages to the page manager
+	a.pageMap["main"] = a.createMainSearchPage()
+	a.pageMap["inflections"] = a.createInflectionSearchPage()
+	a.pageMap["meanings"] = a.createMeaningSearchPage()
+	a.pageMap["help"] = a.createHelpPage()
+
+	for name, page := range a.pageMap {
+		a.pages.AddPage(name, page.Root, true, name == "main")
+	}
+}
+
+// createMainSearchPage builds the primary search interface.
+func (a *App) createMainSearchPage() Page {
+	// --- Components ---
 	a.inputField = tview.NewInputField().SetLabel("Search: ").SetFieldWidth(30)
 	a.wordList = tview.NewList().ShowSecondaryText(false)
-	leftFlex := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(a.inputField, 3, 1, true).
-		AddItem(a.wordList, 0, 4, false)
-
-	// --- Right Pane: Details Display ---
-	// FIX: Initialize the TextView first, then set the border.
 	a.detailsView = tview.NewTextView().
 		SetDynamicColors(true).
 		SetWrap(true).
 		SetWordWrap(true)
 	a.detailsView.SetBorder(true)
-	a.showHelp() // Show help text on startup
+	a.detailsView.SetText(helpText) // Show help on startup
 
-	// --- Main Layout ---
+	// --- Layout ---
+	leftFlex := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(a.inputField, 3, 1, true).
+		AddItem(a.wordList, 0, 4, false)
+
 	topFlex := tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(leftFlex, 0, 1, true).
 		AddItem(a.detailsView, 0, 2, false)
 
-	// --- Footer ---
+	// --- Handlers ---
+	a.setupMainPageWidgetHandlers()
+
+	return Page{
+		Root:        a.createPageFrame(topFlex),
+		FocusTarget: a.inputField,
+	}
+}
+
+// createInflectionSearchPage builds the UI for searching by inflected form.
+func (a *App) createInflectionSearchPage() Page {
+	theme := ModalTheme{
+		BgColor:               tcell.ColorSteelBlue,
+		HeaderFooterBg:        tcell.ColorDarkSlateGray,
+		DetailsBg:             tcell.ColorMidnightBlue,
+		PrimaryTextColor:      tcell.ColorLightCyan,
+		AccentColor:           tcell.ColorAqua,
+		FieldBgColor:          tcell.ColorDarkBlue,
+		ListSelectedBgColor:   tcell.ColorDarkSlateGray,
+		ListSelectedTextColor: tcell.ColorAqua,
+	}
+
+	onSelect := func(baseWord string) {
+		a.inputField.SetText(baseWord)
+		a.updateWordList(baseWord)
+		a.switchPage("main")
+	}
+
+	onSearch := func(query string, results *tview.List, details *tview.TextView) {
+		a.performInflectionSearch(query, results, details)
+	}
+
+	onResultChanged := func(mainText string, details *tview.TextView) {
+		parts := strings.Split(mainText, " ~> ")
+		if len(parts) == 2 {
+			details.SetText(data.GenerateGlossText(parts[1], a.glosses, a.prefixMatcher)).ScrollToBeginning()
+		}
+	}
+
+	title := fmt.Sprintf("tsk (%s) - Inflection Search", a.version)
+	searchLabel := "Inflected form: "
+	detailsTitle := "Base Form Details"
+	footerText := "Esc to return to main search. Enter on result to select."
+
+	pageContent, searchInput := a.createGenericSearchLayout(title, searchLabel, detailsTitle, footerText, theme, onSearch, onResultChanged, onSelect)
+
+	return Page{
+		Root:        a.createPageFrame(pageContent),
+		FocusTarget: searchInput,
+	}
+}
+
+// createMeaningSearchPage builds the UI for reverse-searching by English meaning.
+func (a *App) createMeaningSearchPage() Page {
+	theme := ModalTheme{
+		BgColor:               tcell.GetColor("#002b36"), // Solarized Dark Base
+		HeaderFooterBg:        tcell.GetColor("#073642"), // Solarized Dark Base02
+		DetailsBg:             tcell.GetColor("#00222b"), // Darker variant for details
+		PrimaryTextColor:      tcell.GetColor("#839496"), // Solarized Text
+		AccentColor:           tcell.ColorTeal,
+		FieldBgColor:          tcell.GetColor("#073642"), // Solarized Dark Base02
+		ListSelectedBgColor:   tcell.ColorTeal,
+		ListSelectedTextColor: tcell.ColorWhite,
+	}
+
+	onSelect := func(finnishWord string) {
+		a.inputField.SetText(finnishWord)
+		a.updateWordList(finnishWord)
+		a.switchPage("main")
+	}
+
+	onSearch := func(query string, results *tview.List, details *tview.TextView) {
+		a.performMeaningSearch(query, results, details)
+	}
+
+	onResultChanged := func(mainText string, details *tview.TextView) {
+		details.SetText(data.GenerateGlossText(mainText, a.glosses, a.prefixMatcher)).ScrollToBeginning()
+	}
+
+	title := fmt.Sprintf("tsk (%s) - English->Finnish Reverse Search", a.version)
+	searchLabel := "English term: "
+	detailsTitle := "Finnish Word Details"
+	footerText := "Esc to return to main search. Enter on result to select."
+
+	pageContent, searchInput := a.createGenericSearchLayout(title, searchLabel, detailsTitle, footerText, theme, onSearch, onResultChanged, onSelect)
+
+	return Page{
+		Root:        a.createPageFrame(pageContent),
+		FocusTarget: searchInput,
+	}
+}
+
+// createHelpPage builds the static help screen.
+func (a *App) createHelpPage() Page {
+	textView := tview.NewTextView().
+		SetDynamicColors(true).
+		SetText(helpText).
+		SetScrollable(true)
+	textView.SetBorder(true).SetTitle("Help (Esc to return)")
+
+	// The page itself needs an input capture to handle Esc
+	textView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEsc {
+			a.switchPage("main")
+			return nil
+		}
+		return event
+	})
+
+	return Page{
+		Root:        a.createPageFrame(textView),
+		FocusTarget: textView,
+	}
+}
+
+// --- UI Creation Helpers ---
+
+// createPageFrame builds the standard layout with a header, footer, and content area.
+func (a *App) createPageFrame(content tview.Primitive) *tview.Flex {
+	header := a.createHeader()
 	footer := a.createFooter()
 
-	// --- Final Assembly ---
-	mainFlex := tview.NewFlex().
+	pageLayout := tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(header, 1, 0, false).
 		AddItem(nil, 1, 0, false). // Spacer
-		AddItem(topFlex, 0, 1, true).
+		AddItem(content, 0, 1, true).
 		AddItem(nil, 1, 0, false). // Spacer
 		AddItem(footer, 1, 0, false)
 
-	a.pages.AddPage("main", mainFlex, true, true)
-
-	// --- Setup Widget Handlers ---
-	a.setupWidgetHandlers()
+	return pageLayout
 }
 
-// setupWidgetHandlers configures the event handlers for the interactive widgets.
-func (a *App) setupWidgetHandlers() {
-	// When the selected item in the word list changes
-	a.wordList.SetChangedFunc(func(idx int, mainText string, _ string, _ rune) {
-		a.displayGloss(mainText)
-		if _, marked := a.markedWords[mainText]; marked {
-			a.wordList.SetSelectedBackgroundColor(tcell.ColorYellow)
-		} else {
-			a.wordList.SetSelectedBackgroundColor(tcell.ColorWhite)
-		}
+// createHeader creates the top header component.
+func (a *App) createHeader() *tview.Flex {
+	headerLeft := tview.NewTextView().
+		SetText(fmt.Sprintf("tsk (%s) - Andrew's Pocket Finnish Dictionary", a.version)).
+		SetTextAlign(tview.AlignLeft).
+		SetTextColor(tcell.ColorBlack)
+	headerLeft.SetBackgroundColor(tcell.ColorLightGray)
+
+	headerRight := tview.NewButton("[::u]https://github.com/hiAndrewQuinn/tsk[::-]").
+		SetLabelColor(tcell.ColorWhite).
+		SetSelectedFunc(func() { openBrowser("https://github.com/hiAndrewQuinn/tsk") })
+	headerRight.SetBackgroundColor(tcell.ColorBlue)
+
+	headerFlex := tview.NewFlex().
+		SetDirection(tview.FlexColumn).
+		AddItem(headerLeft, 0, 1, false).
+		AddItem(headerRight, 40, 0, false)
+	headerFlex.SetBackgroundColor(tcell.ColorLightGray)
+
+	return headerFlex
+}
+
+// createFooter creates the bottom footer component.
+func (a *App) createFooter() *tview.Flex {
+	footerLeft := tview.NewTextView().
+		SetText("Ctrl-H for Help. Esc to go back/exit.").
+		SetTextAlign(tview.AlignLeft).
+		SetTextColor(tcell.ColorBlack)
+	footerLeft.SetBackgroundColor(tcell.ColorLightGray)
+
+	footerRight := tview.NewButton("[::u]https://andrew-quinn.me/[::-]").
+		SetLabelColor(tcell.ColorWhite).
+		SetSelectedFunc(func() { openBrowser("https://andrew-quinn.me/") })
+	footerRight.SetBackgroundColor(tcell.ColorBlue)
+
+	footerFlex := tview.NewFlex().
+		SetDirection(tview.FlexColumn).
+		AddItem(footerLeft, 0, 1, false).
+		AddItem(footerRight, 40, 0, false)
+	footerFlex.SetBackgroundColor(tcell.ColorLightGray)
+
+	return footerFlex
+}
+
+// createGenericSearchLayout builds a themed search UI and returns its root primitive and the input field for focusing.
+func (a *App) createGenericSearchLayout(
+	title, searchLabel, detailsTitle, footerText string,
+	theme ModalTheme,
+	onSearchChanged func(query string, results *tview.List, details *tview.TextView),
+	onResultChanged func(mainText string, details *tview.TextView),
+	onResultSelected func(mainText string),
+) (tview.Primitive, *tview.InputField) {
+
+	// --- Components ---
+	searchInput := tview.NewInputField().
+		SetLabel(searchLabel).
+		SetLabelColor(theme.AccentColor).
+		SetFieldBackgroundColor(theme.FieldBgColor).
+		SetFieldTextColor(theme.PrimaryTextColor).
+		SetFieldWidth(30)
+
+	resultsList := tview.NewList().
+		ShowSecondaryText(false).
+		SetSelectedBackgroundColor(theme.ListSelectedBgColor).
+		SetSelectedTextColor(theme.ListSelectedTextColor)
+
+	detailsView := tview.NewTextView().
+		SetDynamicColors(true).
+		SetScrollable(true).
+		SetWrap(true).
+		SetWordWrap(true).
+		SetTextColor(theme.PrimaryTextColor)
+	detailsView.SetBackgroundColor(theme.DetailsBg) // Set background color separately
+	detailsView.SetBorder(true).
+		SetTitle(detailsTitle).
+		SetBorderColor(theme.AccentColor).
+		SetTitleColor(theme.AccentColor)
+
+	// --- Layout ---
+	contentFlex := tview.NewFlex().
+		SetDirection(tview.FlexColumn).
+		AddItem(
+			tview.NewFlex().SetDirection(tview.FlexRow).
+				AddItem(searchInput, 3, 1, true).
+				AddItem(resultsList, 0, 4, false),
+			0, 1, true,
+		).
+		AddItem(detailsView, 0, 2, false)
+	contentFlex.SetBackgroundColor(theme.BgColor)
+
+	// --- Event Handlers ---
+	resultsList.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
+		onResultChanged(mainText, detailsView)
 	})
 
-	// When the text in the input field changes
+	resultsList.SetSelectedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
+		onResultSelected(mainText)
+	})
+
+	searchInput.SetChangedFunc(func(text string) {
+		onSearchChanged(text, resultsList, detailsView)
+	})
+
+	searchInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEsc:
+			a.switchPage("main")
+			return nil
+		case tcell.KeyDown, tcell.KeyEnter:
+			a.app.SetFocus(resultsList)
+			return nil
+		}
+		return event
+	})
+
+	return contentFlex, searchInput
+}
+
+// --- Event Handlers & Actions ---
+
+// setupGlobalInputCapture sets up the application-wide key bindings, which act as a router.
+func (a *App) setupGlobalInputCapture() {
+	a.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEsc:
+			// If not on the main page, Esc returns to main. If on main, it stops the app.
+			name, _ := a.pages.GetFrontPage()
+			if name != "main" {
+				a.switchPage("main")
+				return nil
+			}
+			a.app.Stop()
+			return nil
+		case tcell.KeyCtrlR:
+			openBrowser("https://github.com/hiAndrewQuinn/tsk/issues/new")
+			return nil
+		case tcell.KeyCtrlF:
+			a.switchPage("meanings")
+			return nil
+		case tcell.KeyCtrlE:
+			a.switchPage("inflections")
+			return nil
+		case tcell.KeyCtrlT:
+			a.showExampleSentences() // This remains a context-sensitive action on the main page
+			return nil
+		case tcell.KeyCtrlH:
+			a.switchPage("help")
+			return nil
+		case tcell.KeyCtrlL:
+			a.listMarkedWords() // Context-sensitive action on main page
+			return nil
+		case tcell.KeyCtrlS:
+			a.toggleMarkedWord() // Context-sensitive action on main page
+			return nil
+		}
+
+		// Allow page-specific captures to handle other keys.
+		// If the global handler doesn't handle the key, it's passed to the focused primitive.
+		return event
+	})
+}
+
+// setupMainPageWidgetHandlers configures event handlers for the main search page.
+func (a *App) setupMainPageWidgetHandlers() {
+	a.wordList.SetChangedFunc(func(idx int, mainText string, _ string, _ rune) {
+		a.displayGloss(mainText)
+	})
+
 	a.inputField.SetChangedFunc(func(text string) {
 		a.updateWordList(text)
 	})
 
-	// Capture input for the search field (up/down arrows, enter)
 	a.inputField.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyDown:
@@ -164,68 +513,8 @@ func (a *App) setupWidgetHandlers() {
 		return event
 	})
 
-	// Debounced mouse scroll handler
-	var lastScrollTime time.Time
-	const debounceDuration = 100 * time.Millisecond
-	a.app.SetMouseCapture(func(event *tcell.EventMouse, action tview.MouseAction) (*tcell.EventMouse, tview.MouseAction) {
-		if a.app.GetFocus() == a.wordList {
-			now := time.Now()
-			if now.Sub(lastScrollTime) < debounceDuration {
-				return nil, 0
-			}
-			lastScrollTime = now
-			switch event.Buttons() {
-			case tcell.WheelUp:
-				cur := a.wordList.GetCurrentItem()
-				if cur > 0 {
-					a.wordList.SetCurrentItem(cur - 1)
-				}
-				return nil, 0
-			case tcell.WheelDown:
-				cur := a.wordList.GetCurrentItem()
-				if cur < a.wordList.GetItemCount()-1 {
-					a.wordList.SetCurrentItem(cur + 1)
-				}
-				return nil, 0
-			}
-		}
-		return event, action
-	})
-}
-
-// setupGlobalInputCapture sets up the application-wide key bindings.
-func (a *App) setupGlobalInputCapture() {
-	a.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		// If a modal is visible, don't process global hotkeys.
-		if a.pages.HasPage("meaningSearch") || a.pages.HasPage("inflectionSearch") {
-			return event
-		}
-
+	a.detailsView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
-		case tcell.KeyEsc:
-			a.app.Stop()
-			return nil
-		case tcell.KeyCtrlR:
-			openBrowser("https://github.com/hiAndrewQuinn/tsk/issues/new")
-			return nil
-		case tcell.KeyCtrlF:
-			a.showMeaningSearchModal()
-			return nil
-		case tcell.KeyCtrlE:
-			a.showInflectionSearchModal()
-			return nil
-		case tcell.KeyCtrlT:
-			a.showExampleSentences()
-			return nil
-		case tcell.KeyCtrlH:
-			a.showHelp()
-			return nil
-		case tcell.KeyCtrlL:
-			a.listMarkedWords()
-			return nil
-		case tcell.KeyCtrlS:
-			a.toggleMarkedWord()
-			return nil
 		case tcell.KeyTab:
 			row, col := a.detailsView.GetScrollOffset()
 			a.detailsView.ScrollTo(row+1, col)
@@ -241,7 +530,17 @@ func (a *App) setupGlobalInputCapture() {
 	})
 }
 
-// updateWordList clears and repopulates the word list based on the search text.
+// switchPage changes the visible page and sets focus to the correct element.
+func (a *App) switchPage(name string) {
+	if page, ok := a.pageMap[name]; ok {
+		a.pages.SwitchToPage(name)
+		if page.FocusTarget != nil {
+			a.app.SetFocus(page.FocusTarget)
+		}
+	}
+}
+
+// updateWordList clears and repopulates the main word list based on search text.
 func (a *App) updateWordList(text string) {
 	a.wordList.Clear()
 	if text != "" {
@@ -250,10 +549,12 @@ func (a *App) updateWordList(text string) {
 			a.wordList.AddItem(w, "", 0, nil)
 		}
 	}
-	a.wordList.SetCurrentItem(0)
+	if a.wordList.GetItemCount() > 0 {
+		a.wordList.SetCurrentItem(0)
+	}
 }
 
-// displayGloss shows the definition for the given word in the details view.
+// displayGloss shows the definition for the given word in the main details view.
 func (a *App) displayGloss(word string) {
 	if a.debug {
 		log.Printf("displayGloss: called for word: %s", word)
@@ -261,37 +562,208 @@ func (a *App) displayGloss(word string) {
 
 	_, isMarked := a.markedWords[word]
 	if isMarked {
-		a.detailsView.SetTitle("Word Details (Tab/Shift-Tab to scroll, Ctrl-S to unmark)")
+		a.detailsView.SetTitle("Word Details (Ctrl-S to unmark)")
 		a.detailsView.SetBorderColor(tcell.ColorYellow)
 		a.detailsView.SetTitleColor(tcell.ColorYellow)
+		a.wordList.SetSelectedBackgroundColor(tcell.ColorYellow)
 	} else {
-		a.detailsView.SetTitle("Word Details (Tab/Shift-Tab to scroll, Ctrl-S to mark)")
+		a.detailsView.SetTitle("Word Details (Ctrl-S to mark)")
 		a.detailsView.SetBorderColor(tcell.ColorWhite)
 		a.detailsView.SetTitleColor(tcell.ColorWhite)
+		a.wordList.SetSelectedBackgroundColor(tcell.ColorWhite)
 	}
 
 	glossText := data.GenerateGlossText(word, a.glosses, a.prefixMatcher)
 	a.detailsView.SetText(glossText).ScrollToBeginning()
 }
 
-// saveMarkedWords writes the list of marked words to timestamped .jsonl and .txt files.
-func (a *App) saveMarkedWords() error {
-	if len(a.markedWords) == 0 {
-		return nil // Nothing to save.
+// toggleMarkedWord adds or removes the currently selected word from the marked list.
+func (a *App) toggleMarkedWord() {
+	if a.wordList.GetItemCount() == 0 {
+		a.detailsView.SetTitle("Error").SetBorderColor(tcell.ColorRed).SetTitleColor(tcell.ColorRed)
+		a.detailsView.SetText("\n  [red]You need to search for something before you can mark or unmark it.[white]")
+		return
+	}
+	idx := a.wordList.GetCurrentItem()
+	word, _ := a.wordList.GetItemText(idx)
+
+	if _, present := a.markedWords[word]; present {
+		delete(a.markedWords, word)
+		if a.debug {
+			log.Printf("Unmarking %s.", word)
+		}
+	} else {
+		a.markedWords[word] = struct{}{}
+		if a.debug {
+			log.Printf("Marking %s.", word)
+		}
+	}
+	a.displayGloss(word) // Re-display to update title and border color
+}
+
+// listMarkedWords displays all currently marked words in the details view.
+func (a *App) listMarkedWords() {
+	count := len(a.markedWords)
+	if count == 0 {
+		a.detailsView.SetTitle("Marked words list empty. Kotimaa itkee...").SetBorderColor(tcell.ColorGreen).SetTitleColor(tcell.ColorGreen)
+		a.detailsView.SetText(finnishFlag)
+	} else {
+		a.detailsView.SetTitle(fmt.Sprintf("Listing marked words. (count: %d)", count)).SetBorderColor(tcell.ColorGreen).SetTitleColor(tcell.ColorGreen)
+		sortedWords := make([]string, 0, len(a.markedWords))
+		for w := range a.markedWords {
+			sortedWords = append(sortedWords, w)
+		}
+		sort.Strings(sortedWords)
+
+		var builder strings.Builder
+		builder.WriteString("[green]")
+		for _, w := range sortedWords {
+			builder.WriteString(w + "\n")
+		}
+		builder.WriteString("\n\n[gray]Note: Exported files do not include 'go-deeper' phrases automatically.[white]")
+		a.detailsView.SetText(builder.String())
+	}
+}
+
+// showExampleSentences queries and displays example sentences for the selected word.
+func (a *App) showExampleSentences() {
+	if a.wordList.GetItemCount() == 0 {
+		a.detailsView.SetTitle("No word selected. Kotimaa itkee...").SetBorderColor(tcell.ColorTeal).SetTitleColor(tcell.ColorTeal)
+		a.detailsView.SetText(finnishFlag)
+		return
+	}
+	idx := a.wordList.GetCurrentItem()
+	word, _ := a.wordList.GetItemText(idx)
+	if strings.TrimSpace(word) == "" {
+		a.detailsView.SetText("[teal]No word entered. Please type something in the search bar.[white]")
+		return
 	}
 
+	phrase := `"` + cleanTerm(word) + `"`
+	rows, err := a.exampleDB.Query(`SELECT finnish, english FROM sentences WHERE sentences MATCH ?`, phrase)
+	if err != nil {
+		a.detailsView.SetText(fmt.Sprintf("Error querying examples: %v", err)).SetBorderColor(tcell.ColorRed)
+		return
+	}
+	defer rows.Close()
+
+	var buf strings.Builder
+	found := false
+	buf.WriteString("[white]Example sentences from https://tatoeba.org (CC BY 2.0 FR).\n\n")
+	for rows.Next() {
+		found = true
+		var fin, eng string
+		if err := rows.Scan(&fin, &eng); err == nil {
+			buf.WriteString("[teal]" + fin + "\n")
+			buf.WriteString("[pink]" + eng + "\n\n")
+		}
+	}
+
+	if !found {
+		a.detailsView.SetTitle("No examples found")
+		a.detailsView.SetText("[red]No Tatoeba example sentences found.[white]")
+	} else {
+		a.detailsView.SetTitle(fmt.Sprintf("Examples for '%s'", word))
+		a.detailsView.SetText(buf.String())
+	}
+	a.detailsView.SetBorderColor(tcell.ColorTeal).SetTitleColor(tcell.ColorTeal)
+}
+
+// --- Search Logic ---
+
+// performInflectionSearch handles the logic for the inflection search page.
+func (a *App) performInflectionSearch(query string, results *tview.List, details *tview.TextView) {
+	results.Clear()
+	details.Clear()
+
+	if a.inflectionsDB == nil {
+		details.SetText("\n[red]Inflection search is disabled. The inflections.db file was not found.[white]")
+		return
+	}
+	if len(query) < 3 {
+		if len(query) > 0 {
+			details.SetText(fmt.Sprintf("[gray]Please enter at least 3 characters (you entered %d).", len(query)))
+		}
+		return
+	}
+
+	ftsQuery := query + "*"
+	q := "SELECT inflection, word FROM inflections_fts WHERE inflection MATCH ? ORDER BY LENGTH(inflection) LIMIT 50"
+	rows, err := a.inflectionsDB.Query(q, ftsQuery)
+	if err != nil {
+		details.SetText(fmt.Sprintf("[red]Database query failed: %v[white]", err))
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var inflection, word string
+		if err := rows.Scan(&inflection, &word); err == nil {
+			results.AddItem(fmt.Sprintf("%s ~> %s", inflection, word), "", 0, nil)
+		}
+	}
+	if results.GetItemCount() > 0 {
+		results.SetCurrentItem(0)
+	} else {
+		details.SetText(fmt.Sprintf("No base form found for '%s'.", query))
+	}
+}
+
+// performMeaningSearch handles the logic for the meaning search page.
+func (a *App) performMeaningSearch(query string, results *tview.List, details *tview.TextView) {
+	results.Clear()
+	details.Clear()
+	trimmedQuery := strings.ToLower(strings.TrimSpace(query))
+	if trimmedQuery == "" {
+		return
+	}
+
+	foundMap := make(map[string]struct{})
+	for word, glossSlice := range a.glosses {
+		for _, gloss := range glossSlice {
+			for _, meaning := range gloss.Meanings {
+				if strings.Contains(strings.ToLower(meaning), trimmedQuery) {
+					foundMap[word] = struct{}{}
+					break
+				}
+			}
+		}
+	}
+
+	matches := make([]string, 0, len(foundMap))
+	for word := range foundMap {
+		matches = append(matches, word)
+	}
+	sort.Strings(matches)
+
+	for _, match := range matches {
+		results.AddItem(match, "", 0, nil)
+	}
+
+	if results.GetItemCount() > 0 {
+		results.SetCurrentItem(0)
+	} else {
+		details.SetText(fmt.Sprintf("No Finnish words found for '%s'.", query))
+	}
+}
+
+// --- File I/O & Utilities ---
+
+// saveMarkedWords writes the list of marked words to timestamped files.
+func (a *App) saveMarkedWords() error {
+	if len(a.markedWords) == 0 {
+		return nil
+	}
 	ts := time.Now().Format("2006-01-02-15-04-05")
 	base := fmt.Sprintf("tsk-marked_%s", ts)
-	jsonFile := base + ".jsonl"
-	txtFile := base + ".txt"
+	jsonFile, txtFile := base+".jsonl", base+".txt"
 
-	// --- JSONL dump ---
+	// JSONL dump
 	fj, err := os.Create(jsonFile)
 	if err != nil {
 		return fmt.Errorf("error creating %s: %w", jsonFile, err)
 	}
 	defer fj.Close()
-
 	for wform := range a.markedWords {
 		if glossSlice, ok := a.glosses[wform]; ok {
 			for _, gloss := range glossSlice {
@@ -308,367 +780,26 @@ func (a *App) saveMarkedWords() error {
 	}
 	fmt.Printf("Saved %d words’ gloss entries to %s\n", len(a.markedWords), jsonFile)
 
-	// --- TXT (one-column CSV) dump ---
+	// TXT dump
 	ft, err := os.Create(txtFile)
 	if err != nil {
 		return fmt.Errorf("error creating %s: %w", txtFile, err)
 	}
 	defer ft.Close()
-
 	cw := csv.NewWriter(ft)
 	defer cw.Flush()
-
 	cw.Write([]string{"Base Form"}) // Header
 	sortedWords := make([]string, 0, len(a.markedWords))
 	for w := range a.markedWords {
 		sortedWords = append(sortedWords, w)
 	}
 	sort.Strings(sortedWords)
-
 	for _, w := range sortedWords {
 		cw.Write([]string{w})
 	}
-
 	fmt.Printf("Saved %d marked words to %s\n", len(sortedWords), txtFile)
 	return nil
 }
-
-// ----------------------
-// UI Creation Methods
-// ----------------------
-
-func (a *App) createHeader() *tview.Flex {
-	headerLeft := tview.NewTextView().
-		SetText(fmt.Sprintf("tsk (%s) - Andrew's Pocket Finnish Dictionary", a.version)).
-		SetTextAlign(tview.AlignLeft).
-		SetTextColor(tcell.ColorBlack)
-	headerLeft.SetBackgroundColor(tcell.ColorLightGray)
-
-	headerRight := tview.NewButton("[::u]https://github.com/hiAndrewQuinn/tsk[::-]")
-	headerRight.SetLabelColor(tcell.ColorWhite)
-	headerRight.SetSelectedFunc(func() {
-		openBrowser("https://github.com/hiAndrewQuinn/tsk")
-	})
-
-	headerFlex := tview.NewFlex().SetDirection(tview.FlexColumn)
-	headerFlex.SetBackgroundColor(tcell.ColorLightGray)
-	headerFlex.
-		AddItem(headerLeft, 0, 1, false).
-		AddItem(headerRight, 40, 0, false)
-	return headerFlex
-}
-
-func (a *App) createFooter() *tview.Flex {
-	footerLeft := tview.NewTextView().
-		SetText("Esc to exit. Enter to clear search. Up/Down to scroll. Wiktionary entries under CC BY-SA.").
-		SetTextAlign(tview.AlignLeft).
-		SetTextColor(tcell.ColorBlack)
-	footerLeft.SetBackgroundColor(tcell.ColorLightGray)
-
-	footerRight := tview.NewButton("[::u]https://andrew-quinn.me/[::-]")
-	footerRight.SetLabelColor(tcell.ColorWhite)
-	footerRight.SetSelectedFunc(func() {
-		openBrowser("https://andrew-quinn.me/")
-	})
-
-	footerFlex := tview.NewFlex().SetDirection(tview.FlexColumn)
-	footerFlex.SetBackgroundColor(tcell.ColorLightGray)
-	footerFlex.
-		AddItem(footerLeft, 0, 1, false).
-		AddItem(footerRight, 40, 0, false)
-	return footerFlex
-}
-
-// ----------------------
-// Action/Handler Methods
-// ----------------------
-
-func (a *App) showHelp() {
-	a.detailsView.SetTitle("Word Details (Tab/Shift-Tab to scroll, Ctrl-S to mark)")
-	a.detailsView.SetBorderColor(tcell.ColorWhite)
-	a.detailsView.SetTitleColor(tcell.ColorWhite)
-	a.detailsView.SetText(helpText)
-}
-
-func (a *App) toggleMarkedWord() {
-	if a.wordList.GetItemCount() == 0 {
-		a.detailsView.SetText("\n  [red]You need to search for something before you can mark or unmark it.[white]")
-		a.detailsView.SetTitle("Word Details (Tab/Shift-Tab to scroll, Ctrl-S to mark)")
-		a.detailsView.SetBorderColor(tcell.ColorRed)
-		a.detailsView.SetTitleColor(tcell.ColorRed)
-		return
-	}
-	idx := a.wordList.GetCurrentItem()
-	word, _ := a.wordList.GetItemText(idx)
-
-	a.inputField.SetText(word)
-
-	if _, present := a.markedWords[word]; present {
-		delete(a.markedWords, word)
-		if a.debug {
-			log.Printf("Unmarking %s.", word)
-		}
-	} else {
-		a.markedWords[word] = struct{}{}
-		if a.debug {
-			log.Printf("Marking %s.", word)
-		}
-	}
-	a.updateWordList(a.inputField.GetText())
-}
-
-func (a *App) listMarkedWords() {
-	a.detailsView.SetBorderColor(tcell.ColorGreen)
-	a.detailsView.SetTitleColor(tcell.ColorGreen)
-
-	count := len(a.markedWords)
-	if count == 0 {
-		a.detailsView.SetTitle("Marked words list empty. Kotimaa itkee...")
-		a.detailsView.SetText(finnishFlag)
-	} else {
-		a.detailsView.SetTitle(fmt.Sprintf("Listing marked words. (count: %d)", count))
-
-		sortedWords := make([]string, 0, len(a.markedWords))
-		for w := range a.markedWords {
-			sortedWords = append(sortedWords, w)
-		}
-		sort.Strings(sortedWords)
-
-		var builder strings.Builder
-		builder.WriteString("[green]")
-		for _, w := range sortedWords {
-			builder.WriteString(w)
-			builder.WriteByte('\n')
-		}
-		builder.WriteString("[white]")
-		builder.WriteString("\n\n[gray]Note: Exported files do not include 'go-deeper' phrases automatically.[white]")
-		a.detailsView.SetText(builder.String())
-	}
-}
-
-func (a *App) showExampleSentences() {
-	if a.wordList.GetItemCount() == 0 {
-		a.detailsView.SetBorderColor(tcell.ColorTeal)
-		a.detailsView.SetTitleColor(tcell.ColorTeal)
-		a.detailsView.SetTitle("No word selected. Kotimaa itkee...")
-		a.detailsView.SetText(finnishFlag)
-		return
-	}
-
-	idx := a.wordList.GetCurrentItem()
-	word, _ := a.wordList.GetItemText(idx)
-
-	if strings.TrimSpace(word) == "" {
-		a.detailsView.SetText("[teal]No word entered. Please type something in the search bar.[white]")
-		return
-	}
-
-	phrase := `"` + cleanTerm(word) + `"`
-	q := `SELECT finnish, english FROM sentences WHERE sentences MATCH ?`
-	rows, err := a.exampleDB.Query(q, phrase)
-	if err != nil {
-		a.detailsView.SetText(fmt.Sprintf("Error querying examples: %v", err))
-		a.detailsView.SetBorderColor(tcell.ColorRed)
-		return
-	}
-	defer rows.Close()
-
-	var buf strings.Builder
-	found := false
-	buf.WriteString("[white]Example sentences from https://tatoeba.org (CC BY 2.0 FR).\n\n")
-
-	for rows.Next() {
-		found = true
-		var fin, eng string
-		if err := rows.Scan(&fin, &eng); err != nil {
-			continue
-		}
-		buf.WriteString("[teal]" + fin + "\n")
-		buf.WriteString("[pink]" + eng + "\n\n")
-	}
-
-	if !found {
-		a.detailsView.SetTitle("No examples found")
-		a.detailsView.SetText("[red]No Tatoeba example sentences found.[white]")
-	} else {
-		a.detailsView.SetTitle(fmt.Sprintf("Examples for '%s' (Tab/Shift-Tab to scroll)", word))
-		a.detailsView.SetText(buf.String())
-	}
-	a.detailsView.SetBorderColor(tcell.ColorTeal)
-	a.detailsView.SetTitleColor(tcell.ColorTeal)
-}
-
-// ----------------------
-// Modal Implementations
-// ----------------------
-
-func (a *App) showInflectionSearchModal() {
-	if a.inflectionsDB == nil {
-		a.detailsView.SetTitle("Inflection Search Unavailable")
-		a.detailsView.SetBorderColor(tcell.ColorRed)
-		a.detailsView.SetTitleColor(tcell.ColorRed)
-		a.detailsView.SetText("\n[red]Inflection search is disabled. The inflections.db file was not found.[white]")
-		return
-	}
-
-	const modalPageName = "inflectionSearch"
-	searchInput := tview.NewInputField().SetLabel("Inflected form: ").SetFieldWidth(30)
-	resultsList := tview.NewList().ShowSecondaryText(false)
-	detailsView := tview.NewTextView().SetDynamicColors(true).SetScrollable(true).SetWrap(true).SetWordWrap(true)
-	detailsView.SetBorder(true).SetTitle("Base Form Details")
-
-	modal := tview.NewFlex().
-		SetDirection(tview.FlexRow).
-		AddItem(tview.NewFlex().SetDirection(tview.FlexColumn).
-			AddItem(searchInput, 3, 1, true).
-			AddItem(resultsList, 0, 4, false), 0, 1, true).
-		AddItem(detailsView, 0, 2, false)
-
-	resultsList.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
-		parts := strings.Split(mainText, " ~> ")
-		if len(parts) == 2 {
-			baseWord := parts[1]
-			glossText := data.GenerateGlossText(baseWord, a.glosses, a.prefixMatcher)
-			detailsView.SetText(glossText).ScrollToBeginning()
-		}
-	})
-
-	resultsList.SetSelectedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
-		parts := strings.Split(mainText, " ~> ")
-		if len(parts) == 2 {
-			a.inputField.SetText(parts[1])
-		}
-		a.pages.RemovePage(modalPageName)
-		a.app.SetFocus(a.inputField)
-	})
-
-	searchInput.SetChangedFunc(func(text string) {
-		query := strings.TrimSpace(text)
-		resultsList.Clear()
-		detailsView.Clear()
-		if len(query) < 3 {
-			return
-		}
-
-		ftsQuery := query + "*"
-		q := "SELECT inflection, word FROM inflections_fts WHERE inflection MATCH ? LIMIT 50"
-		rows, err := a.inflectionsDB.Query(q, ftsQuery)
-		if err != nil {
-			detailsView.SetText(fmt.Sprintf("[red]Database query failed: %v[white]", err))
-			return
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var inflection, word string
-			if err := rows.Scan(&inflection, &word); err == nil {
-				resultsList.AddItem(fmt.Sprintf("%s ~> %s", inflection, word), "", 0, nil)
-			}
-		}
-		resultsList.SetCurrentItem(0)
-	})
-
-	searchInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyEsc:
-			a.pages.RemovePage(modalPageName)
-			return nil
-		case tcell.KeyEnter:
-			a.app.SetFocus(resultsList)
-			return nil
-		case tcell.KeyDown:
-			a.app.SetFocus(resultsList)
-			return nil
-		}
-		return event
-	})
-
-	a.pages.AddPage(modalPageName, modal, true, true)
-	a.app.SetFocus(searchInput)
-}
-
-func (a *App) showMeaningSearchModal() {
-	const modalPageName = "meaningSearch"
-	searchInput := tview.NewInputField().SetLabel("English term: ").SetFieldWidth(30)
-	resultsList := tview.NewList().ShowSecondaryText(false)
-	detailsView := tview.NewTextView().SetDynamicColors(true).SetScrollable(true).SetWrap(true).SetWordWrap(true)
-	detailsView.SetBorder(true).SetTitle("Finnish Word Details")
-
-	modal := tview.NewFlex().
-		SetDirection(tview.FlexRow).
-		AddItem(tview.NewFlex().SetDirection(tview.FlexColumn).
-			AddItem(searchInput, 3, 1, true).
-			AddItem(resultsList, 0, 4, false), 0, 1, true).
-		AddItem(detailsView, 0, 2, false)
-
-	searchAction := func() {
-		query := strings.ToLower(strings.TrimSpace(searchInput.GetText()))
-		resultsList.Clear()
-		detailsView.Clear()
-		if query == "" {
-			return
-		}
-
-		foundMap := make(map[string]struct{})
-		for word, glossSlice := range a.glosses {
-			for _, gloss := range glossSlice {
-				for _, meaning := range gloss.Meanings {
-					if strings.Contains(strings.ToLower(meaning), query) {
-						foundMap[word] = struct{}{}
-						break
-					}
-				}
-			}
-		}
-
-		matches := make([]string, 0, len(foundMap))
-		for word := range foundMap {
-			matches = append(matches, word)
-		}
-		sort.Strings(matches)
-
-		for _, match := range matches {
-			resultsList.AddItem(match, "", 0, nil)
-		}
-		resultsList.SetCurrentItem(0)
-	}
-
-	resultsList.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
-		glossText := data.GenerateGlossText(mainText, a.glosses, a.prefixMatcher)
-		detailsView.SetText(glossText).ScrollToBeginning()
-	})
-
-	resultsList.SetSelectedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
-		a.inputField.SetText(mainText)
-		a.pages.RemovePage(modalPageName)
-		a.app.SetFocus(a.inputField)
-	})
-
-	searchInput.SetDoneFunc(func(key tcell.Key) {
-		if key == tcell.KeyEnter {
-			searchAction()
-		}
-	})
-
-	searchInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyEsc:
-			a.pages.RemovePage(modalPageName)
-			return nil
-		case tcell.KeyDown, tcell.KeyUp:
-			a.app.SetFocus(resultsList)
-			return nil
-		}
-		return event
-	})
-
-	a.pages.AddPage(modalPageName, modal, true, true)
-	a.app.SetFocus(searchInput)
-}
-
-// ----------------------
-// Standalone Utilities
-// ----------------------
 
 // openBrowser opens the specified URL in the default browser.
 func openBrowser(url string) error {
@@ -698,54 +829,3 @@ func cleanTerm(s string) string {
 	return s[start:end]
 }
 
-// ----------------------
-// Constants
-// ----------------------
-
-const helpText = `[gray]
-	Keybindings:
-	Esc         = Exit
-	Enter       = Clear search
-	Up/Down     = Scroll word list
-
-	Tab         = Scroll Word Details forward
-	Shift-Tab   = Scroll Word Details backward
-
-	[blue]Control-E[gray]   = [blue]Etsi perusmuotin, aka lemmatizer[gray]. Find a word's base form from its inflected form.
-	[teal]Control-T[gray]   = Show [teal]example sentences[gray], from Tatoeba for the selected word.
-	[yellow]Control-S[gray] = [yellow]Mark[gray]/unmark words. All marked words will be saved upon Esc to a text file.
-	[green]Control-L[gray]  = [green]List[gray] marked words. 
-	[cyan]Control-F[gray]   = [cyan]Reverse-find[gray] words by searching their English definitions.
-	[pink]Control-H[gray]   = Show this [pink]help[gray] text again.
-
-	[red]Control-R[gray]   = [red]Report a bug[gray] on GitHub.com. [red]Opens your web browser[gray].
-	[white]`
-
-const finnishFlag = `[gray]
-                         _,-(.;)
-                     _,-',###""
-                 _,-',###",'|
-             _,-',###" ,-" :|
-         _,-',###" _,#"   .'|
- ### _,-',###"_,######    : |
-_,-',###;-'"~. #####9   :' |
-,###"   |   :  ######  ,. _|
-"       | :     #####( .;###|
-        |:'.    ######,6####|
-        |..     ;############|
-        ":_,###############|
-          |##############'~ |
-          |############".   |
-         .###########':     |
-         :##".   #####. '   |
-         | :'    ######.   .|
-         |.'     ######     |
-         |.      ######   ':|
-         ":      ######   .:.|
-          |     ."#####    ._|
-          |      :#####_,-'""
-          |    '.,###""
-         :'  .:,-'
-         |_.,-'
-         "
-	[white]`
