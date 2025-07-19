@@ -16,7 +16,7 @@ import (
 
 // --- Constants & Version ---
 const version = "v0.0.1"
-const defaultInputFile = "example-sentences.tsv"
+const defaultInputFile = "data/example-sentences.tsv"
 const defaultOutputFile = "example-sentences.sqlite"
 
 // ftsSchema contains the SQL to create the virtual FTS5 table.

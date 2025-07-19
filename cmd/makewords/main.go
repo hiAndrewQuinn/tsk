@@ -15,7 +15,7 @@ import (
 
 // --- Constants & Version ---
 const version = "v0.0.1"
-const defaultInputFile = "glosses.jsonl"
+const defaultInputFile = "data/glosses.jsonl"
 const defaultOutputFile = "words.txt"
 
 // GlossWord defines the minimal structure needed to extract the 'word' field.

@@ -16,7 +16,7 @@ import (
 // Version & Constants
 // ----------------------
 const version = "v0.0.1"
-const defaultInputFile = "glosses.jsonl"
+const defaultInputFile = "data/glosses.jsonl"
 const defaultOutputFile = "glosses.gob"
 
 // ----------------------
