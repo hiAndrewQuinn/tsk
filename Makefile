@@ -25,6 +25,7 @@ DB_FILE := $(ASSET_DIR)/example-sentences.sqlite
 # --- Tools ---
 MAKEGLOSS_CMD := go run ./cmd/makegloss
 DB_BUILDER_CMD := go run ./cmd/builddb
+MAKEWORDS_CMD := go run ./cmd/makewords # <--- ADD THIS LINE
 # Define platforms for cross-compilation
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/386
 
@@ -51,7 +52,7 @@ build: assets
 		if [ "$$OS" = "windows" ]; then \
 			OUTPUT=$${OUTPUT}.exe; \
 		fi; \
-		echo "   - $$OS/$$ARCH -> $$OUTPUT"; \
+		echo "     - $$OS/$$ARCH -> $$OUTPUT"; \
 		GOOS=$$OS GOARCH=$$ARCH CGO_ENABLED=0 go build -ldflags="-s -w" -o $$OUTPUT $(MAIN_PKG); \
 	done
 
@@ -62,10 +63,10 @@ $(GOB_FILE): $(JSONL_SRC) cmd/makegloss/main.go
 	@echo "-> Generating $(GOB_FILE)..."
 	@$(MAKEGLOSS_CMD) -in $(JSONL_SRC) -out $(GOB_FILE)
 
-# Rule to generate words.txt and place it in the assets directory
-$(WORDS_FILE): $(JSONL_SRC)
+# Rule to generate words.txt using the new 'makewords' Go program
+$(WORDS_FILE): $(JSONL_SRC) cmd/makewords/main.go # <--- MODIFIED
 	@echo "-> Generating $(WORDS_FILE)..."
-	@jq -r '.word' $(JSONL_SRC) | sort -u > $(WORDS_FILE)
+	@$(MAKEWORDS_CMD) -in $(JSONL_SRC) -out $(WORDS_FILE) # <--- MODIFIED
 
 # Rule to build the SQLite DB using the 'builddb' Go program
 $(DB_FILE): $(TSV_SRC) cmd/builddb/main.go

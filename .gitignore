@@ -40,3 +40,7 @@ tsk-marked*
 *.sqlite
 *.db
 *.gob
+
+# words.txt, like all of our binary artifacts, is produced at compile
+# time by Make via a dedicated Go program. We no longer need it.
+*words.txt*
