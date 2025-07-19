@@ -21,6 +21,7 @@ import (
 
 	// Import your internal packages.
 	// The paths must match your module structure.
+
 	"github.com/hiAndrewQuinn/tsk/internal/data"
 	"github.com/hiAndrewQuinn/tsk/internal/trie"
 )

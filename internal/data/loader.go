@@ -22,6 +22,7 @@ import (
 	// SQLite driver.
 	_ "modernc.org/sqlite"
 
+	"github.com/hiAndrewQuinn/tsk/internal/logger"
 	"github.com/hiAndrewQuinn/tsk/internal/trie"
 )
 
@@ -36,7 +37,6 @@ var goDeeperTxt string
 
 //go:embed assets/example-sentences.sqlite
 var embeddedDB []byte
-
 
 // Gloss represents the definition of a word, including its part of speech
 // and a list of meanings.
@@ -83,7 +83,7 @@ func LoadGlosses() (map[string][]Gloss, error) {
 // PrefixMatcher holds the data structures needed for efficient "go deeper"
 // prefix lookups.
 type PrefixMatcher struct {
-	prefixMap    map[string]struct{}
+	prefixMap     map[string]struct{}
 	prefixLengths []int
 }
 
@@ -126,6 +126,10 @@ func NewPrefixMatcher() (*PrefixMatcher, error) {
 // findLongestPrefix checks if a string starts with one of the known "go deeper"
 // phrases and returns the longest one that matches.
 func (pm *PrefixMatcher) findLongestPrefix(s string) (string, bool) {
+	// This handles the entry and exit logs automatically.
+	defer log.Printf("%s: Exiting.", logger.Enter())
+	logger.Tracef("Checking for prefixes which match '%s'", s)
+
 	// This check is a fast path to avoid unnecessary work.
 	if pm == nil || len(pm.prefixMap) == 0 {
 		return "", false
@@ -135,7 +139,10 @@ func (pm *PrefixMatcher) findLongestPrefix(s string) (string, bool) {
 	// Iterate from the longest possible phrase down to a single word.
 	for i := len(words); i > 0; i-- {
 		candidate := strings.Join(words[:i], " ") + " "
+		logger.Tracef("Is '%s' in prefixMap?", candidate)
+
 		if _, ok := pm.prefixMap[candidate]; ok {
+			logger.Tracef("Yes! Returning '%s' from prefixMap.", candidate)
 			return candidate, true
 		}
 	}
@@ -299,4 +306,3 @@ func LoadTrie() (*trie.Trie, error) {
 
 	return t, nil
 }
-

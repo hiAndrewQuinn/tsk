@@ -71,4 +71,3 @@ Example:
 func init() {
 	rootCmd.AddCommand(rfindCmd)
 }
-

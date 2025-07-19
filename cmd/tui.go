@@ -3,6 +3,7 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/hiAndrewQuinn/tsk/internal/config"
 	"github.com/hiAndrewQuinn/tsk/internal/tui"
 )
 
@@ -14,19 +15,16 @@ var tuiCmd = &cobra.Command{
 		// Instantiate the TUI application, passing in all the
 		// data loaded by the root command's PersistentPreRunE.
 		app := tui.NewApp(
-			Version,         // Still undefined in root.go
-			debug,
+			Version, // Still undefined in root.go
+			config.Debug,
 			wordTrie,
 			glosses,
-			goDeeperMatcher, // FIX: Use the correct variable name
-			exampleDB,       // Still undefined in root.go
-			inflectionsDB,   // Still undefined in root.go
+			goDeeperMatcher,
+			exampleDB,
+			inflectionsDB,
 		)
 
 		// Run the application and return any error it encounters.
 		return app.Run()
 	},
 }
-
-// FIX: The init() function has been removed.
-// rootCmd.AddCommand(tuiCmd) is already called in cmd/root.go.

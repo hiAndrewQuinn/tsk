@@ -2,12 +2,14 @@
 package cmd
 
 import (
-	"database/sql" // <-- 1. Import the sql package
+	"database/sql"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strings"
 
+	"github.com/hiAndrewQuinn/tsk/internal/config"
 	"github.com/hiAndrewQuinn/tsk/internal/data"
 	"github.com/hiAndrewQuinn/tsk/internal/trie"
 	"github.com/spf13/cobra"
@@ -23,7 +25,6 @@ var (
 	goDeeperMatcher *data.PrefixMatcher
 
 	glosses map[string][]data.Gloss
-	debug   bool
 
 	// 2. Declare the missing variables here.
 	// Version is the application version, typically set at build time.
@@ -31,6 +32,26 @@ var (
 	exampleDB     *sql.DB
 	inflectionsDB *sql.DB
 )
+
+// setupLogging configures the log output. If debug is true, it logs to
+// debug.log. Otherwise, it discards all log output.
+func setupLogging() error {
+	if !config.Debug {
+		log.SetOutput(io.Discard)
+		return nil
+	}
+
+	log.SetFlags(log.Ldate | log.Ltime)
+
+	file, err := os.OpenFile("debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("could not open debug.log: %w", err)
+	}
+
+	log.SetOutput(file)
+	log.Println("Debug mode enabled. Logging to debug.log.")
+	return nil
+}
 
 var rootCmd = &cobra.Command{
 	Use:   "tsk [word...]",
@@ -59,6 +80,10 @@ as arguments to get their definitions directly.`,
 		return tuiCmd.RunE(cmd, args)
 	},
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if err := setupLogging(); err != nil {
+			return err
+		}
+
 		var err error
 		glosses, err = data.LoadGlosses()
 		if err != nil {
@@ -76,7 +101,7 @@ as arguments to get their definitions directly.`,
 		if err != nil {
 			return fmt.Errorf("failed to load 'go deeper' prefix matcher: %w", err)
 		}
-		
+
 		// 3. Load the databases.
 		exampleDB, err = data.LoadExampleDB()
 		if err != nil {
@@ -89,7 +114,7 @@ as arguments to get their definitions directly.`,
 			// optional file simply doesn't exist. We should bubble up real errors.
 			return fmt.Errorf("failed to load inflections db: %w", err)
 		}
-		
+
 		return nil
 	},
 }
@@ -102,6 +127,6 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "Enable debug logging")
+	rootCmd.PersistentFlags().BoolVar(&config.Debug, "debug", false, "Enable debug logging")
 	rootCmd.AddCommand(tuiCmd)
 }

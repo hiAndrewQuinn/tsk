@@ -103,4 +103,3 @@ func (t *Trie) CountNodes() int {
 	traverse(t.root)
 	return count
 }
-

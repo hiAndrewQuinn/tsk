@@ -5,6 +5,7 @@ package cmd
 import (
 	"fmt"
 	"regexp"
+
 	// "strings" // This unused import is now removed.
 
 	"github.com/spf13/cobra"
@@ -34,7 +35,6 @@ Example:
 			// Strip the tview color tags for clean terminal output.
 			cleanText := stripColorTags(glossText)
 			fmt.Println(cleanText)
-
 
 			// Print a separator between results, but not after the last one.
 			if i < len(args)-1 {
