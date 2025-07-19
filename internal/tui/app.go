@@ -16,8 +16,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/rivo/tview"
 	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 
 	"github.com/hiAndrewQuinn/tsk/internal/data"
 	"github.com/hiAndrewQuinn/tsk/internal/trie"
@@ -42,32 +42,32 @@ const helpText = `[gray]
 	[white]`
 
 const finnishFlag = `[gray]
-                            _,-(.;)
-                          _,-',###""
-                        _,-',###",'|
-                      _,-',###" ,-" :|
-                    _,-',###" _,#"   .'|
-          ### _,-',###"_,######   : |
-        _,-',###;-'"~. #####9   :' |
-      ,###"   |   :  ######  ,. _|
-      "       | :     #####( .;###|
-              |:'.     ######,6####|
-              |..       ;############|
-              ":_,###############|
-                  |##############'~ |
-                  |############".   |
-                  .###########':     |
-                  :##".   #####. '   |
-                  | :'    ######.   .|
-                  |.'     ######     |
-                  |.       ######   ':|
-                  ":       ######   .:.|
-                   |      ."#####    ._|
-                   |         :#####_,-'""
-                   |      '.,###""
-                   :'  .:,-'
-                   |_.,-'
-                   "
+                      _,-(.;)
+                    _,-',###""
+                  _,-',###",'|
+                _,-',###" ,-" :|
+              _,-',###" _,#"   .'|
+            ### _,-',###"_,######   : |
+          _,-',###;-'"~. #####9   :' |
+        ,###"   |   :  ######  ,. _|
+        "       | :     #####( .;###|
+                |:'.     ######,6####|
+                |..       ;############|
+                ":_,###############|
+                      |##############'~ |
+                      |############".   |
+                      .###########':    |
+                      :##".   #####. '   |
+                      | :'    ######.   .|
+                      |.'     ######     |
+                      |.      ######   ':|
+                      ":      ######   .:.|
+                       |     ."#####    ._|
+                       |         :#####_,-'""
+                       |       '.,###""
+                       :'   .:,-'
+                       |_.,-'
+                       "
 	[white]`
 
 // --- Type Definitions ---
@@ -116,6 +116,20 @@ type ModalTheme struct {
 	FieldBgColor          tcell.Color
 	ListSelectedBgColor   tcell.Color
 	ListSelectedTextColor tcell.Color
+}
+
+// GenericSearchConfig encapsulates all the configuration for a generic search page.
+type GenericSearchConfig struct {
+	Title            string
+	SearchLabel      string
+	DetailsTitle     string
+	FooterText       string
+	Theme            ModalTheme
+	InstantSearch    bool
+	MinSearchChars   int
+	OnSearch         func(query string, results *tview.List, details *tview.TextView)
+	OnResultChanged  func(mainText string, details *tview.TextView)
+	OnResultSelected func(mainText string)
 }
 
 // --- Initialization ---
@@ -210,29 +224,35 @@ func (a *App) createInflectionSearchPage() Page {
 		ListSelectedTextColor: tcell.ColorAqua,
 	}
 
-	onSelect := func(baseWord string) {
-		a.mainInput.SetText(baseWord)
-		a.updateWordList(baseWord)
-		a.switchPage("main")
+	config := GenericSearchConfig{
+		Title:          fmt.Sprintf("tsk (%s) - Inflection Search", a.version),
+		SearchLabel:    "Inflected form: ",
+		DetailsTitle:   "Base Form Details",
+		FooterText:     "Esc to exit. Ctrl-E to return. Enter on result to select.",
+		Theme:          theme,
+		InstantSearch:  true,
+		MinSearchChars: 3,
+		OnSearch: func(query string, results *tview.List, details *tview.TextView) {
+			a.performInflectionSearch(query, results, details)
+		},
+		OnResultChanged: func(mainText string, details *tview.TextView) {
+			parts := strings.Split(mainText, " ~> ")
+			if len(parts) == 2 {
+				details.SetText(data.GenerateGlossText(parts[1], a.glosses, a.prefixMatcher)).ScrollToBeginning()
+			}
+		},
+		OnResultSelected: func(mainText string) {
+			baseWord := mainText
+			if parts := strings.Split(mainText, " ~> "); len(parts) == 2 {
+				baseWord = parts[1]
+			}
+			a.mainInput.SetText(baseWord)
+			a.updateWordList(baseWord)
+			a.switchPage("main")
+		},
 	}
 
-	onSearch := func(query string, results *tview.List, details *tview.TextView) {
-		a.performInflectionSearch(query, results, details)
-	}
-
-	onResultChanged := func(mainText string, details *tview.TextView) {
-		parts := strings.Split(mainText, " ~> ")
-		if len(parts) == 2 {
-			details.SetText(data.GenerateGlossText(parts[1], a.glosses, a.prefixMatcher)).ScrollToBeginning()
-		}
-	}
-
-	title := fmt.Sprintf("tsk (%s) - Inflection Search", a.version)
-	searchLabel := "Inflected form: "
-	detailsTitle := "Base Form Details"
-	footerText := "Esc to exit. Ctrl-E to return to main search. Enter on result to select."
-
-	pageContent, searchInput, list := a.createGenericSearchLayout(title, searchLabel, detailsTitle, footerText, theme, onSearch, onResultChanged, onSelect)
+	pageContent, searchInput, list := a.createGenericSearchLayout(config)
 	a.inflectionList = list // Store reference to the list
 
 	return Page{
@@ -254,26 +274,28 @@ func (a *App) createMeaningSearchPage() Page {
 		ListSelectedTextColor: tcell.ColorWhite,
 	}
 
-	onSelect := func(finnishWord string) {
-		a.mainInput.SetText(finnishWord)
-		a.updateWordList(finnishWord)
-		a.switchPage("main")
+	config := GenericSearchConfig{
+		Title:          fmt.Sprintf("tsk (%s) - English->Finnish Reverse Search", a.version),
+		SearchLabel:    "English term: ",
+		DetailsTitle:   "Finnish Word Details",
+		FooterText:     "Esc to exit. Ctrl-F to return. Press Enter to search, then Enter on result to select.",
+		Theme:          theme,
+		InstantSearch:  false,
+		MinSearchChars: 1,
+		OnSearch: func(query string, results *tview.List, details *tview.TextView) {
+			a.performMeaningSearch(query, results, details)
+		},
+		OnResultChanged: func(mainText string, details *tview.TextView) {
+			details.SetText(data.GenerateGlossText(mainText, a.glosses, a.prefixMatcher)).ScrollToBeginning()
+		},
+		OnResultSelected: func(finnishWord string) {
+			a.mainInput.SetText(finnishWord)
+			a.updateWordList(finnishWord)
+			a.switchPage("main")
+		},
 	}
 
-	onSearch := func(query string, results *tview.List, details *tview.TextView) {
-		a.performMeaningSearch(query, results, details)
-	}
-
-	onResultChanged := func(mainText string, details *tview.TextView) {
-		details.SetText(data.GenerateGlossText(mainText, a.glosses, a.prefixMatcher)).ScrollToBeginning()
-	}
-
-	title := fmt.Sprintf("tsk (%s) - English->Finnish Reverse Search", a.version)
-	searchLabel := "English term: "
-	detailsTitle := "Finnish Word Details"
-	footerText := "Esc to exit. Ctrl-F to return to main search. Enter on result to select."
-
-	pageContent, searchInput, list := a.createGenericSearchLayout(title, searchLabel, detailsTitle, footerText, theme, onSearch, onResultChanged, onSelect)
+	pageContent, searchInput, list := a.createGenericSearchLayout(config)
 	a.meaningList = list // Store reference to the list
 
 	return Page{
@@ -289,9 +311,6 @@ func (a *App) createHelpPage() Page {
 		SetText(helpText).
 		SetScrollable(true)
 	textView.SetBorder(true).SetTitle("Help (Ctrl-H to return, Esc to exit)")
-
-	// NOTE: The local 'Esc' handler was removed.
-	// The global input capture now handles Esc to exit the entire application.
 
 	return Page{
 		Root:        a.createPageFrame(textView),
@@ -361,39 +380,35 @@ func (a *App) createFooter() *tview.Flex {
 	return footerFlex
 }
 
-// createGenericSearchLayout builds a themed search UI and returns its root primitive and the input field for focusing.
+// createGenericSearchLayout builds a themed search UI based on the provided configuration.
 func (a *App) createGenericSearchLayout(
-	title, searchLabel, detailsTitle, footerText string,
-	theme ModalTheme,
-	onSearchChanged func(query string, results *tview.List, details *tview.TextView),
-	onResultChanged func(mainText string, details *tview.TextView),
-	onResultSelected func(mainText string),
+	config GenericSearchConfig,
 ) (tview.Primitive, *tview.InputField, *tview.List) {
 
 	// --- Components ---
 	searchInput := tview.NewInputField().
-		SetLabel(searchLabel).
-		SetLabelColor(theme.AccentColor).
-		SetFieldBackgroundColor(theme.FieldBgColor).
-		SetFieldTextColor(theme.PrimaryTextColor).
+		SetLabel(config.SearchLabel).
+		SetLabelColor(config.Theme.AccentColor).
+		SetFieldBackgroundColor(config.Theme.FieldBgColor).
+		SetFieldTextColor(config.Theme.PrimaryTextColor).
 		SetFieldWidth(30)
 
 	resultsList := tview.NewList().
 		ShowSecondaryText(false).
-		SetSelectedBackgroundColor(theme.ListSelectedBgColor).
-		SetSelectedTextColor(theme.ListSelectedTextColor)
+		SetSelectedBackgroundColor(config.Theme.ListSelectedBgColor).
+		SetSelectedTextColor(config.Theme.ListSelectedTextColor)
 
 	detailsView := tview.NewTextView().
 		SetDynamicColors(true).
 		SetScrollable(true).
 		SetWrap(true).
 		SetWordWrap(true).
-		SetTextColor(theme.PrimaryTextColor)
-	detailsView.SetBackgroundColor(theme.DetailsBg) // Set background color separately
+		SetTextColor(config.Theme.PrimaryTextColor)
+	detailsView.SetBackgroundColor(config.Theme.DetailsBg)
 	detailsView.SetBorder(true).
-		SetTitle(detailsTitle).
-		SetBorderColor(theme.AccentColor).
-		SetTitleColor(theme.AccentColor)
+		SetTitle(config.DetailsTitle).
+		SetBorderColor(config.Theme.AccentColor).
+		SetTitleColor(config.Theme.AccentColor)
 
 	// --- Layout ---
 	contentFlex := tview.NewFlex().
@@ -405,26 +420,47 @@ func (a *App) createGenericSearchLayout(
 			0, 1, true,
 		).
 		AddItem(detailsView, 0, 2, false)
-	contentFlex.SetBackgroundColor(theme.BgColor)
+	contentFlex.SetBackgroundColor(config.Theme.BgColor)
 
 	// --- Event Handlers ---
 	resultsList.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
-		onResultChanged(mainText, detailsView)
+		config.OnResultChanged(mainText, detailsView)
 	})
 
 	resultsList.SetSelectedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
-		onResultSelected(mainText)
+		config.OnResultSelected(mainText)
 	})
 
-	searchInput.SetChangedFunc(func(text string) {
-		onSearchChanged(text, resultsList, detailsView)
-	})
+	searchAction := func(text string) {
+		trimmedText := strings.TrimSpace(text)
+		// Always clear on empty input
+		if len(trimmedText) == 0 {
+			resultsList.Clear()
+			detailsView.Clear()
+			return
+		}
+		// Check against minimum characters
+		if len(trimmedText) >= config.MinSearchChars {
+			config.OnSearch(trimmedText, resultsList, detailsView)
+		} else {
+			resultsList.Clear() // Clear previous results
+			detailsView.SetText(fmt.Sprintf("[gray]Please enter at least %d character(s).", config.MinSearchChars))
+		}
+	}
+
+	if config.InstantSearch {
+		searchInput.SetChangedFunc(searchAction)
+	}
 
 	searchInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		// NOTE: The local 'Esc' handler was removed.
-		// The global input capture now handles Esc to exit the entire application.
 		switch event.Key() {
-		case tcell.KeyDown, tcell.KeyEnter:
+		case tcell.KeyDown:
+			a.app.SetFocus(resultsList)
+			return nil
+		case tcell.KeyEnter:
+			if !config.InstantSearch {
+				searchAction(searchInput.GetText())
+			}
 			a.app.SetFocus(resultsList)
 			return nil
 		}
@@ -441,7 +477,6 @@ func (a *App) setupGlobalInputCapture() {
 	a.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyEsc:
-			// Per user request, Esc always exits the application.
 			a.app.Stop()
 			return nil
 		case tcell.KeyCtrlR:
@@ -531,9 +566,7 @@ func (a *App) togglePage(pageName string) {
 }
 
 // handleActionWithContext ensures that word-based actions (like marking a word or showing examples)
-// are executed in the context of the main page. If called from another page,
-// it preserves the currently selected word, returns to the main page,
-// and then executes the action.
+// are executed in the context of the main page.
 func (a *App) handleActionWithContext(action func()) {
 	name, _ := a.pages.GetFrontPage()
 
@@ -545,19 +578,16 @@ func (a *App) handleActionWithContext(action func()) {
 		case "meanings":
 			selectedList = a.meaningList
 		default:
-			// For pages without a list (e.g., help), just switch to main
 			a.switchPage("main")
 			action()
 			return
 		}
 
-		// If there is a list and it has items, grab the selected one
 		if selectedList != nil && selectedList.GetItemCount() > 0 {
 			idx := selectedList.GetCurrentItem()
 			mainText, _ := selectedList.GetItemText(idx)
 			wordToSearch := mainText
 
-			// For inflections, we want the base word (e.g., from "juoksen ~> juosta")
 			if name == "inflections" {
 				if parts := strings.Split(mainText, " ~> "); len(parts) == 2 {
 					wordToSearch = parts[1]
@@ -565,9 +595,9 @@ func (a *App) handleActionWithContext(action func()) {
 			}
 
 			a.switchPage("main")
-			a.mainInput.SetText(wordToSearch) // This repopulates the main list
+			a.mainInput.SetText(wordToSearch)
 		} else {
-			a.switchPage("main") // Switch to main even if no word is selected
+			a.switchPage("main")
 		}
 	}
 
@@ -724,12 +754,6 @@ func (a *App) performInflectionSearch(query string, results *tview.List, details
 		details.SetText("\n[red]Inflection search is disabled. The inflections.db file was not found.[white]")
 		return
 	}
-	if len(query) < 3 {
-		if len(query) > 0 {
-			details.SetText(fmt.Sprintf("[gray]Please enter at least 3 characters (you entered %d).", len(query)))
-		}
-		return
-	}
 
 	ftsQuery := query + "*"
 	q := "SELECT inflection, word FROM inflections_fts WHERE inflection MATCH ? ORDER BY LENGTH(inflection) LIMIT 50"
@@ -757,10 +781,7 @@ func (a *App) performInflectionSearch(query string, results *tview.List, details
 func (a *App) performMeaningSearch(query string, results *tview.List, details *tview.TextView) {
 	results.Clear()
 	details.Clear()
-	trimmedQuery := strings.ToLower(strings.TrimSpace(query))
-	if trimmedQuery == "" {
-		return
-	}
+	trimmedQuery := strings.ToLower(query)
 
 	foundMap := make(map[string]struct{})
 	for word, glossSlice := range a.glosses {
@@ -872,3 +893,4 @@ func cleanTerm(s string) string {
 	}
 	return s[start:end]
 }
+
