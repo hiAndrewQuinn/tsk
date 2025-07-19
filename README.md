@@ -1,170 +1,102 @@
-# tsk - Taskusanakirja
+# tsk - taskusanakirja
 
-A tiny, fast, and portable Finnish-English dictionary that searches as you type.
+A tiny, fast, and feature-rich Finnish-English dictionary. Search as fast as you can type. *Tsemppiä!*
 
-![recording-ezgif com-speed](https://github.com/user-attachments/assets/eed841b8-1dbe-42dc-953e-429e6ee7104c)
-
-## [See the latest release in action on Youtube](https://www.youtube.com/watch?v=MSa3P491mNw)
-
-This image hyperlinks to the Youtube video " `tsk` (tasusanakirja, Finnish-English pocket dictionary) - v0.0.6 ".
-[![Watch the video](https://img.youtube.com/vi/MSa3P491mNw/maxresdefault.jpg)](https://www.youtube.com/watch?v=MSa3P491mNw)
-
-v0.0.6 can be downloaded from the [Releases page](https://github.com/hiAndrewQuinn/tsk/releases) as a single file, for Linux, MacOSX and Windows, just like all the previous releases!
+### 📺 [Watch the v0.0.6 release in action on YouTube\!](http://www.youtube.com/watch?v=MSa3P491mNw)
 
 ## Overview
 
-**tsk** (*taskusanakirja*, "pocket dictionary") is a lightweight Finnish-English dictionary tool written in Go. It leverages a custom trie data structure to provide real-time search results and displays word definitions instantly in a sleek terminal user interface built with [tcell](https://github.com/gdamore/tcell) and [tview](https://github.com/rivo/tview). With pre-built binaries for multiple platforms, tsk is designed and has been tested to work seamlessly on Linux, Windows, and macOS.
+**tsk** (from *taskusanakirja*, "pocket dictionary") is a powerful, lightweight Finnish-English dictionary designed for the command line. Written in **Go**, it's a single, portable file with no dependencies.
+
+It's built for language learners, developers, and anyone who needs a fast, offline-first dictionary. It uses a custom **trie** for instant autocompletion and embeds its data—including word glosses, example sentences, and inflection data—directly into the binary. This means you get a full-featured dictionary in one file that works seamlessly on **Linux**, **Windows**, and **macOS**.
 
 ## Features
 
-- **Instant Search:** Get immediate word suggestions as you type.
-- **Efficient Lookup:** Uses a custom trie for fast and effective searching.
-- **Responsive TUI:** Clean, intuitive terminal interface for quick navigation.
-- **Cross-Platform Support:** Pre-built binaries available for:
-  - macOS, aka Darwin (amd64, arm64)
-  - Linux (amd64, arm64)
-  - Windows (386, amd64)
-- **Single-file portability:** All of the dictionary info has been embedded right alongside the program itself, so you really do only need that one file. Plug and play!
-
-### Fun fact
-
-While the word you type will always be at the top of the list, the order of the other words or phrases you see is *not* deterministic. Repeated lookups of the same phrase *will* lead to different results:
-
-![animated](https://github.com/user-attachments/assets/4b340ca7-fcbd-4861-94c3-c845df40df70)
-
-
-Or if there are only a few possible completions anyway, their order may be rarranged:
-
-![animated](https://github.com/user-attachments/assets/3eb69170-36a8-4689-86a1-525059adff95)
-
-This is a happy accident of the randomly pruning trie data structure we built atop. We could force a deterministic order, but that would take all the fun out of it. 😼
-
-
+  - ✨ **Instant Search-As-You-Type**: Get immediate word suggestions from a massive wordlist.
+  - 🧠 **Inflection/Lemmatizer Search (Ctrl-E)**: Don't know the base word? No problem. Search for `talossa` and find `talo`.
+  - 🔄 **Reverse English-to-Finnish Search (Ctrl-F)**: Find Finnish words by searching their English definitions.
+  - 📚 **Example Sentences (Ctrl-T)**: See the selected word in context with real-world examples from Tatoeba.
+  - 🌱 **"Go Deeper" Definitions**: Automatically see definitions for words within other definitions for a seamless learning experience.
+  - ⭐ **Vocabulary Builder**: **Mark** words with `Ctrl-S`, view your list with `Ctrl-L`, and export it to JSONL or TXT files when you quit.
+  - 🚀 **Cross-Platform & Portable**: A single, dependency-free binary for macOS (amd64, arm64), Linux (amd64, arm64), and Windows (386, amd64).
+  - 🎨 **Sleek TUI**: A clean and responsive terminal interface powered by the excellent `tview` and `tcell` libraries.
 
 ## Installation
 
-You can either build `tsk` from source or download a pre-built binary from Releases.
+Download the latest pre-built binary for your operating system from the [**Releases Page**](https://github.com/hiAndrewQuinn/tsk/releases).
 
-### Downloading Pre-built Binaries
+No installation is needed. Just download the file, (optionally) rename it to `tsk`, and run it\!
 
-Visit the [release page](https://github.com/hiAndrewQuinn/tsk/releases) to download the binary suitable for your platform.
+-----
 
-### Building from Source
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/hiAndrewQuinn/tsk.git
-   cd tsk
-   ```
-
-2. **Build the project using the provided Makefile:**
-   ```bash
-   make
-   ```
-   The compiled binaries will be located in the `build` directory.
-
-### Running with Docker
-
-Assuming you have first run `make` as above, you can build a Docker image using the attached Dockerfile with
-
-```bash
-docker build -t tsk .    # make sure to run make first. Otherwise there is no program to copy!
-```
-
-and run it with
-
-```bash
-docker run --rm -it tsk
-```
-
-## Makefile Commands
-
-The Makefile provides several useful targets for building, installing, and cleaning up the project:
-
-- **`make` or `make all`**  
-  This is the default target. It first generates `words.txt` from `glosses.jsonl` using the command:
-  ```bash
-  jq '.word' glosses.jsonl | sort -u > words.txt
-  ```
-  Then it creates the build directory and compiles the binary for all defined platforms, placing them in the `build` directory.
-
-- **`make words.txt`**  
-  Regenerates the `words.txt` file from `glosses.jsonl` independently. This is useful if you update the glosses and want to update the word list without rebuilding the entire project.
-
-- **`make build-all`**  
-  Builds the binary for all supported target platforms. This target is run as part of the default `all` target but can also be invoked on its own if you wish to rebuild the binaries.
-
-- **`make install`**  
-  Builds the project (if not already built) and then installs the binary for your current platform into your system's PATH (defaulting to `/usr/local/bin`). On non-Windows systems, it copies the appropriate binary from the `build` directory so you can run `tsk` from anywhere. (Installation is not supported on Windows.)
-
-- **`make clean`**  
-  Removes the entire `build` directory and any compiled binaries, effectively cleaning up the project build artifacts.
-
-Additionally, you can use flags such as `make -B` to force rebuilds or `make -j4` to build in parallel for faster compilation.
-
-## Usage
+## How to Use
 
 Run the binary from your terminal:
 
-- On macOS or Linux:
-  ```bash
-  ./tsk
-  ```
-- On Windows:
-  ```bash
-  tsk_windows_amd64.exe    # or just double click it!
-  ```
+```bash
+./tsk
+```
 
-Once launched, type in the search bar to see instant Finnish word suggestions along with their definitions. Use the arrow keys to navigate through the list, and press `Enter` to clear the search field.
+Or on Windows, just double-click the `.exe` file\!
 
-### Security Alerts and Permissions
+### Keybindings
 
-When downloading pre-built binaries on macOS and Windows, you might encounter security warnings or alerts. These are standard precautions by your operating system to protect against unverified software. If you trust the source (aka, this project), here’s how to bypass these warnings:
+| Key | Action |
+| :--- | :--- |
+| `Up/Down` | Scroll through the word list. |
+| `Tab/Shift-Tab` | Scroll the details view. |
+| `Ctrl-E` | Toggle **Inflection Search** (find base words). |
+| `Ctrl-F` | Toggle **Reverse Find** (search English definitions). |
+| `Ctrl-T` | Show **Example Sentences** for the selected word. |
+| `Ctrl-S` | **Mark/Unmark** the selected word. |
+| `Ctrl-L` | **List** all your marked words. |
+| `Ctrl-H` | Show the **Help** screen. |
+| `Esc` | Exit the application. |
 
-#### macOS
+-----
 
-- **Unidentified Developer Warning:**  
-  If you see a message that the app is from an unidentified developer, go to **System Preferences > Security & Privacy > General** and click the **Open Anyway** button.
-  
-- **Alternate Method:**  
-  Right-click (or Control-click) the binary in Finder and select **Open**. This will prompt a confirmation dialog that allows you to run the application.
+## Building From Source
 
-#### Windows
+If you'd rather build it yourself:
 
-- **SmartScreen Warning:**  
-  Windows Defender SmartScreen might display a warning. Click **More Info** in the warning dialog, then select **Run Anyway** to launch the application.
-  
-- **Verification:**  
-  Ensure that the binary is downloaded from the official [release page](https://github.com/hiAndrewQuinn/tsk/releases) to maintain security and integrity.
+1.  **Clone the repository:**
 
-Following these steps will allow you to run tsk safely while acknowledging your operating system’s built-in security measures.
+    ```bash
+    git clone https://github.com/hiAndrewQuinn/tsk.git
+    cd tsk
+    ```
+
+2.  **Build the data and binaries:**
+    The project uses a `Makefile` to simplify the build process. These commands are now powered by Go programs in the `cmd/` directory.
+
+    ```bash
+    make
+    ```
+
+    This command will:
+
+      - Generate `glosses.gob` from `data/glosses.jsonl`.
+      - Generate `words.txt` from `data/glosses.jsonl`.
+      - Build the `tsk` binary for your current system into the `build/` directory.
+
+### Makefile Commands
+
+  - `make all`: The default target. Builds all data files and the binary for the host OS.
+  - `make glosses`: Builds the `glosses.gob` data file.
+  - `make words`: Builds the `words.txt` list.
+  - `make build-all`: Compiles binaries for all supported platforms.
+  - `make install`: Installs the `tsk` binary to `/usr/local/bin` (not supported on Windows).
+  - `make clean`: Removes the `build` directory and generated data files.
+
+-----
 
 ## Data Sources
 
-- **words.txt:** A comprehensive list of Finnish words.
-- **glosses.jsonl:** Word definitions (glosses) derived from Wiktionary.
-
-**Note:** The word list and gloss data are derivatives from Wiktionary and are licensed under [CC BY-SA](https://creativecommons.org/licenses/by-sa/3.0/).
+  - **Glosses & Words**: Derived from Wiktionary, licensed under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
+  - **Example Sentences**: Sourced from [Tatoeba](https://tatoeba.org), licensed under [CC BY 2.0 FR](https://creativecommons.org/licenses/by/2.0/fr/).
+  - **Inflections**: An optional, user-provided SQLite database.
 
 ## License
 
-- **Go Code:** Released under the [Unlicense](https://unlicense.org/).
-- **Data Files (words.txt and glosses.jsonl):** Licensed under [CC BY-SA](https://creativecommons.org/licenses/by-sa/3.0/) due to their derivation from Wiktionary.
-
-## Credits & Acknowledgments
-
-- **Andrew Quinn:** Creator of tsk and a passionate contributor to the Finnish language community.
-- [tcell](https://github.com/gdamore/tcell) and [tview](https://github.com/rivo/tview) for their excellent, portable libraries that power the TUI.
-- Wiktionary for providing the source data for word definitions.
-
-## Contributing
-
-Contributions are welcome! If you have ideas for improvements, bug fixes, or additional features, please fork the repository and submit a pull request.
-
-## Contact
-
-For more information, visit the [project repository](https://github.com/hiAndrewQuinn/tsk) or check out [Andrew's website](https://andrew-quinn.me/).
-
----
-
-Happy searching, and thank you for using tsk!
+  - **Code**: The Unlicense (Public Domain).
+  - **Data**: See Data Sources section for details.
