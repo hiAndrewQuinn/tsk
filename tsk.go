@@ -51,7 +51,7 @@ const helpText = `[gray]
 	[yellow]Control-S[gray]  = [yellow]Mark[gray]/unmark words. All marked words will be saved upon Esc to a text file.
 	[green]Control-L[gray]  = [green]List[gray] marked words. 
 	[cyan]Control-F[gray]  = [cyan]Reverse-find[gray] words by searching their English definitions.
-	[pink]Control-H[gray]  = Show this [pink]help[gray] text again.
+	[pink]Control-A[gray]  = Show this [pink]help[gray] text again.
 
 	[red]Control-R[gray]  = [red]Report a bug[gray] on GitHub.com. [red]Opens your web browser[gray] to
 
@@ -1478,7 +1478,7 @@ func main() {
 			textView.SetText(buf.String())
 
 			return nil
-		case tcell.KeyCtrlH:
+		case tcell.KeyCtrlA:
 			textView.SetTitle("Word Details (Tab/Shift-Tab to scroll, Ctrl-S to mark)")
 			textView.SetBorderColor(tcell.ColorWhite)
 			textView.SetTitleColor(tcell.ColorWhite)

@@ -19,7 +19,12 @@ INSTALL_DIR ?= /usr/local/bin
 .PHONY: all clean install
 
 # Now all depends on generating words.txt, the output dir, the DB, and the Go builds
-all: words.txt $(OUTPUT_DIR) $(DB) build-all
+all: words.txt glosses.gob $(OUTPUT_DIR) $(DB) build-all
+
+# Rule to generate glosses.gob
+glosses.gob: glosses.jsonl buildglossgob.go
+	@echo "Generating glosses.gob..."
+	go run buildglossgob.go
 
 # Generate words.txt from glosses.jsonl before building
 words.txt: glosses.jsonl
@@ -55,5 +60,5 @@ install: all
 	cp $(OUTPUT_DIR)/tsk_$(shell go env GOOS)_$(shell go env GOARCH)_$(VERSION) $(INSTALL_DIR)/tsk
 
 clean:
-	rm -rf $(OUTPUT_DIR) $(DB)
+	rm -rf $(OUTPUT_DIR) $(DB) glosses.gob
 
